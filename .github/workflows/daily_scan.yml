@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests supabase
+          pip install requests supabase tzdata
           
       - name: Run Fatty Rodriguez Script
         env:
