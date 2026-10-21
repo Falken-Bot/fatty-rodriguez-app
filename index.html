@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fatty Rodriguez - Multi-Sport Daily 3-Pick Engine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            green: '#00ff88',
+                            greenHover: '#00cc6d',
+                            dark: '#0b0f17',
+                            card: '#151c28',
+                            border: '#232d3f',
+                            accent: '#1e293b'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+        
+        body {
+            background-color: #0b0f17;
+            color: #f1f5f9;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glow-green {
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.15);
+        }
+
+        .border-glow {
+            border-color: rgba(0, 255, 136, 0.4);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f17;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00ff88;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-brand-green selection:text-black">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-brand-border bg-brand-card/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brand-green text-black font-black text-2xl px-3 py-1.5 rounded-lg shadow-lg flex items-center justify-center transform -rotate-1">
+                    FR
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black tracking-tight flex items-center space-x-2">
+                        <span>FATTY RODRIGUEZ</span>
+                        <span class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-brand-green/10 text-brand-green border border-brand-green/30">v2.4 PRO</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium">Multi-Sport Daily 3-Pick Engine | Best 2 Selection System</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <button onclick="openModal('settingsModal')" class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-brand-accent hover:bg-slate-700 text-slate-200 text-sm font-medium transition border border-slate-700">
+                    <i data-lucide="sliders" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Rules & Filters</span>
+                </button>
+                <button onclick="openModal('deployModal')" class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-brand-green/10 border border-brand-green/30 text-brand-green hover:bg-brand-green/20 text-sm font-medium transition">
+                    <i data-lucide="code-2" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Free API Setup</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1 space-y-8">
+
+        <!-- Top Metrics & Controls Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <!-- Bankroll/Unit Tracker -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <span>Base Unit</span>
+                    <i data-lucide="dollar-sign" class="w-4 h-4 text-brand-green"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="unitDisplay" class="text-2xl font-bold font-mono">$2.00</span>
+                    <span class="text-xs text-slate-400">Fixed</span>
+                </div>
+            </div>
+
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <span>Total P/L</span>
+                    <i data-lucide="trending-up" class="w-4 h-4 text-brand-green" id="plIcon"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="totalPL" class="text-2xl font-bold font-mono text-brand-green">+$0.00</span>
+                    <span id="roiDisplay" class="text-xs text-slate-400">0.0% ROI</span>
+                </div>
+            </div>
+
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <span>Record</span>
+                    <i data-lucide="target" class="w-4 h-4 text-brand-green"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="recordDisplay" class="text-2xl font-bold font-mono">0W - 0L</span>
+                    <span id="winrateDisplay" class="text-xs text-slate-400">0%</span>
+                </div>
+            </div>
+
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <span>Odds Filter</span>
+                    <i data-lucide="filter" class="w-4 h-4 text-brand-green"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="oddsRangeDisplay" class="text-xl font-bold font-mono text-slate-200">-115 to -105</span>
+                    <span class="text-xs text-slate-400">Near -110</span>
+                </div>
+            </div>
+
+            <!-- Main Engine Trigger Button -->
+            <div class="col-span-2 md:col-span-1 bg-brand-card border border-brand-border rounded-xl p-2 flex items-center justify-center">
+                <button onclick="runFattyScan()" id="scanBtn" class="w-full h-full bg-brand-green hover:bg-brand-greenHover text-black font-extrabold rounded-lg px-4 py-3 flex items-center justify-center space-x-2 transition shadow-lg glow-green active:scale-95">
+                    <i data-lucide="zap" class="w-5 h-5 fill-black"></i>
+                    <span id="scanBtnText" class="tracking-wide">RUN FATTY SCAN</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Today's Candidates & Selection Engine View -->
+        <section class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-lg font-bold flex items-center space-x-2">
+                        <span>Today's Daily Candidates</span>
+                        <span class="text-xs font-normal text-slate-400 font-mono">(Must be 3 Different Sports)</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">3 cross-sport -110 candidates generated -> Top 2 isolated for target $2 wager</p>
+                </div>
+                <div class="flex items-center space-x-2 text-xs font-mono text-slate-400">
+                    <span class="inline-block w-2 h-2 rounded-full bg-brand-green animate-pulse"></span>
+                    <span id="lastScanTime">Engine Ready</span>
+                </div>
+            </div>
+
+            <!-- Pick Cards Grid -->
+            <div id="picksContainer" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Initial State Placeholder Cards -->
+                <div class="bg-brand-card/40 border border-dashed border-brand-border rounded-2xl p-8 text-center flex flex-col items-center justify-center space-y-3 min-h-[280px]">
+                    <div class="w-12 h-12 rounded-full bg-brand-accent flex items-center justify-center text-slate-500">
+                        <i data-lucide="cpu" class="w-6 h-6"></i>
+                    </div>
+                    <p class="text-sm text-slate-400 font-medium">Leg 1: Waiting for Scan...</p>
+                    <span class="text-xs text-slate-600">Cross-Sport Slot 1 (e.g. NFL)</span>
+                </div>
+                <div class="bg-brand-card/40 border border-dashed border-brand-border rounded-2xl p-8 text-center flex flex-col items-center justify-center space-y-3 min-h-[280px]">
+                    <div class="w-12 h-12 rounded-full bg-brand-accent flex items-center justify-center text-slate-500">
+                        <i data-lucide="cpu" class="w-6 h-6"></i>
+                    </div>
+                    <p class="text-sm text-slate-400 font-medium">Leg 2: Waiting for Scan...</p>
+                    <span class="text-xs text-slate-600">Cross-Sport Slot 2 (e.g. NHL)</span>
+                </div>
+                <div class="bg-brand-card/40 border border-dashed border-brand-border rounded-2xl p-8 text-center flex flex-col items-center justify-center space-y-3 min-h-[280px]">
+                    <div class="w-12 h-12 rounded-full bg-brand-accent flex items-center justify-center text-slate-500">
+                        <i data-lucide="cpu" class="w-6 h-6"></i>
+                    </div>
+                    <p class="text-sm text-slate-400 font-medium">Leg 3: Waiting for Scan...</p>
+                    <span class="text-xs text-slate-600">Cross-Sport Slot 3 (e.g. NBA)</span>
+                </div>
+            </div>
+
+            <!-- Action Bar for Today's Generated Pick -->
+            <div id="selectionSummary" class="hidden bg-brand-card border border-brand-border rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <div class="p-3 bg-brand-green/10 text-brand-green rounded-xl border border-brand-green/30">
+                        <i data-lucide="check-circle-2" class="w-8 h-8"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-100 text-base">Fatty Rodriguez Top 2 Wager Ready</h3>
+                        <p class="text-xs text-slate-400" id="summaryText">Selected Plays: Leg 1 & Leg 2 | Target Stake: $2.00 each (or $2.00 2-leg parlay)</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <button onclick="logCurrentPicks()" class="w-full sm:w-auto bg-brand-green text-black font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-brand-greenHover transition shadow flex items-center justify-center space-x-2">
+                        <i data-lucide="bookmark-plus" class="w-4 h-4"></i>
+                        <span>Log Plays to Tracker</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Bet Tracker & History -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold flex items-center space-x-2">
+                        <i data-lucide="history" class="w-5 h-5 text-brand-green"></i>
+                        <span>Fatty Rodriguez Bet Tracker</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Historical performance log for $2 system bets</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400 transition flex items-center space-x-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        <span>Clear Log</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="bg-brand-accent/50 text-xs uppercase font-semibold text-slate-400 border-b border-brand-border">
+                            <tr>
+                                <th class="p-4">Date</th>
+                                <th class="p-4">Selected Best 2 Plays</th>
+                                <th class="p-4">Excluded Leg</th>
+                                <th class="p-4">Odds</th>
+                                <th class="p-4">Stake</th>
+                                <th class="p-4">Result</th>
+                                <th class="p-4 text-right">P/L ($)</th>
+                                <th class="p-4 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trackerTableBody" class="divide-y divide-brand-border font-mono text-xs">
+                            <!-- Rows will be dynamically rendered here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-brand-border bg-brand-card py-6 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                <span class="font-bold text-slate-300">Fatty Rodriguez Betting Engine</span> &copy; 2026 | Automated $0 Architecture
+            </div>
+            <div class="flex items-center space-x-4 text-slate-400">
+                <span>Multi-Sport: NFL / NHL / NBA / MLB / UFC</span>
+                <span>•</span>
+                <span>Team Markets Only</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODAL 1: Rules & Customization Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-card border border-brand-border rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-brand-border pb-4">
+                <h3 class="text-lg font-bold flex items-center space-x-2">
+                    <i data-lucide="sliders" class="w-5 h-5 text-brand-green"></i>
+                    <span>Engine Rules & Configuration</span>
+                </h3>
+                <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Target Base Stake ($)</label>
+                    <input type="number" id="inputUnitSize" value="2.00" step="0.50" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-slate-100 font-mono focus:border-brand-green focus:outline-none">
+                    <p class="text-[11px] text-slate-500 mt-1">Default Fatty Rodriguez standard unit ($2.00 per bet).</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Min Odds (American)</label>
+                        <input type="text" id="inputMinOdds" value="-115" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-slate-100 font-mono focus:border-brand-green focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Max Odds (American)</label>
+                        <input type="text" id="inputMaxOdds" value="-105" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-slate-100 font-mono focus:border-brand-green focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-2">Active Sport Pools (Requires 3+ Sports)</label>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <label class="flex items-center space-x-2 bg-brand-dark p-2 rounded border border-brand-border">
+                            <input type="checkbox" checked disabled class="accent-brand-green">
+                            <span>🏈 NFL (Football)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 bg-brand-dark p-2 rounded border border-brand-border">
+                            <input type="checkbox" checked disabled class="accent-brand-green">
+                            <span>🏒 NHL (Hockey)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 bg-brand-dark p-2 rounded border border-brand-border">
+                            <input type="checkbox" checked disabled class="accent-brand-green">
+                            <span>🏀 NBA (Basketball)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 bg-brand-dark p-2 rounded border border-brand-border">
+                            <input type="checkbox" checked disabled class="accent-brand-green">
+                            <span>⚾ MLB (Baseball)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-brand-dark/50 p-3 rounded-lg border border-brand-border text-xs text-slate-400 space-y-1">
+                    <span class="font-bold text-brand-green block">Strict System Rules Applied:</span>
+                    <p>• Cross-Sport Mandate: Exactly 1 leg per unique sport.</p>
+                    <p>• Team Markets Only: Spreads, Totals, Money Lines.</p>
+                    <p>• Top 2 Isolation: Best 2 selected via Matchup Edge Score.</p>
+                </div>
+            </div>
+
+            <div class="flex space-x-3 pt-2">
+                <button onclick="saveSettings()" class="w-full bg-brand-green text-black font-bold py-2.5 rounded-lg hover:bg-brand-greenHover transition text-sm">Save & Apply Rules</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Free API & Python Backend Setup Guide -->
+    <div id="deployModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-brand-border pb-4">
+                <h3 class="text-lg font-bold flex items-center space-x-2">
+                    <i data-lucide="server" class="w-5 h-5 text-brand-green"></i>
+                    <span>Free API & Hosting Setup Guide ($0 Cost)</span>
+                </h3>
+                <button onclick="closeModal('deployModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs text-slate-300">
+                <p>This web dashboard operates standalone with automated client-side evaluation logic. To connect live automated data feeds at $0 cost, follow this blueprint:</p>
+                
+                <div class="space-y-3">
+                    <div class="bg-brand-dark p-3.5 rounded-lg border border-brand-border space-y-1">
+                        <h4 class="font-bold text-brand-green flex items-center justify-between">
+                            <span>1. Free Odds API Setup</span>
+                            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">SharpAPI / The Odds API</span>
+                        </h4>
+                        <p class="text-slate-400">Sign up for a free tier key at <code>the-odds-api.com</code> (500 free calls/mo) or SharpAPI. Set target markets strictly to standard lines (h2h, spreads, totals).</p>
+                    </div>
+
+                    <div class="bg-brand-dark p-3.5 rounded-lg border border-brand-border space-y-1">
+                        <h4 class="font-bold text-brand-green flex items-center justify-between">
+                            <span>2. Python Backend Logic (FastAPI)</span>
+                            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">Render Free Tier</span>
+                        </h4>
+                        <p class="text-slate-400">Deploy a lightweight Python script on Render Web Service (Free Tier) to pull lines daily at 9:00 AM, filter -110 odds, calculate cross-sport top picks, and output JSON.</p>
+                    </div>
+
+                    <div class="bg-brand-dark p-3.5 rounded-lg border border-brand-border space-y-2">
+                        <h4 class="font-bold text-brand-green">3. Sample Python Backend Code Snippet</h4>
+                        <pre class="bg-black/80 p-3 rounded text-[11px] font-mono text-emerald-400 overflow-x-auto border border-slate-800">
+# fatty_engine.py
+import requests
+
+def get_fatty_picks():
+    # Fetch cross-sport odds around -110 (-115 to -105)
+    sports = ['americanfootball_nfl', 'icehockey_nhl', 'basketball_nba']
+    candidates = []
+    
+    for sport in sports:
+        # Fetch odds, filter team spreads/totals between -115 and -105
+        # Pick 1 top candidate per sport
+        pass
+        
+    # Sort top 3 by rating -> return top 2
+    return picks[:2]
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-brand-green/10 border border-brand-green/30 rounded-lg text-brand-green text-[11px]">
+                    <strong>Note:</strong> On Render's free tier, servers spin down after 15 minutes of inactivity. The first scan request after a pause may take 30 seconds to wake up the server.
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeModal('deployModal')" class="bg-brand-accent hover:bg-slate-700 text-slate-200 font-bold px-4 py-2 rounded-lg transition text-xs">Close Guide</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Update Bet Result Modal -->
+    <div id="resultModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-card border border-brand-border rounded-2xl max-w-sm w-full p-6 space-y-5 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-brand-border pb-3">
+                <h3 class="text-base font-bold">Update Wager Result</h3>
+                <button onclick="closeModal('resultModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <p class="text-xs text-slate-400">Select the outcome for the Best 2 selected legs on this $2 wager:</p>
+                <input type="hidden" id="editingLogId">
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="settleBet('WIN')" class="p-3 bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20 rounded-xl font-bold text-sm flex flex-col items-center space-y-1">
+                        <i data-lucide="check-circle" class="w-5 h-5"></i>
+                        <span>WIN (+$1.82)</span>
+                    </button>
+                    <button onclick="settleBet('LOSS')" class="p-3 bg-rose-500/10 border border-rose-500/40 text-rose-400 hover:bg-rose-500/20 rounded-xl font-bold text-sm flex flex-col items-center space-y-1">
+                        <i data-lucide="x-circle" class="w-5 h-5"></i>
+                        <span>LOSS (-$2.00)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Engine -->
+    <script>
+        // System State
+        let unitSize = 2.00;
+        let minOdds = -115;
+        let maxOdds = -105;
+        let currentGeneratedPicks = null;
+        let betHistory = [
+            {
+                id: 101,
+                date: '2026-10-20',
+                best2: ['Detroit Lions -3.5 (-110)', 'NY Rangers ML (-108)'],
+                excluded: 'Boston Celtics -4.0 (-110)',
+                odds: '-110 / -108',
+                stake: 2.00,
+                status: 'WIN',
+                pl: 1.82
+            },
+            {
+                id: 102,
+                date: '2026-10-19',
+                best2: ['Dallas Stars Over 5.5 (-110)', 'LA Dodgers -1.5 (-105)'],
+                excluded: 'Green Bay Packers +2.5 (-112)',
+                odds: '-110 / -105',
+                stake: 2.00,
+                status: 'LOSS',
+                pl: -2.00
+            }
+        ];
+
+        // Mock Database of Cross-Sport Team Games (-110 standard lines)
+        const mockSportsData = {
+            NFL: [
+                { matchup: 'Detroit Lions vs Chicago Bears', selection: 'Detroit Lions -3.5', odds: '-110', edgeScore: 94, detail: 'Matchup Grade: A+ | Line Stability: High' },
+                { matchup: 'Green Bay Packers vs Minnesota Vikings', selection: 'Over 44.5 Points', odds: '-108', edgeScore: 89, detail: 'Pace Advantage | Offense Floor High' },
+                { matchup: 'Buffalo Bills vs Miami Dolphins', selection: 'Buffalo Bills -2.5', odds: '-112', edgeScore: 91, detail: 'Defensive Matchup Edge' }
+            ],
+            NHL: [
+                { matchup: 'NY Rangers vs New Jersey Devils', selection: 'NY Rangers Moneyline', odds: '-108', edgeScore: 92, detail: 'Goalie Rest Edge | Form 4-1' },
+                { matchup: 'Colorado Avalanche vs Dallas Stars', selection: 'Over 6.0 Goals', odds: '-110', edgeScore: 88, detail: 'Powerplay Efficiency Grade A' },
+                { matchup: 'Boston Bruins vs Toronto Maple Leafs', selection: 'Boston Bruins +1.5', odds: '-114', edgeScore: 86, detail: 'Defensive Value Floor' }
+            ],
+            NBA: [
+                { matchup: 'Boston Celtics vs Philadelphia 76ers', selection: 'Boston Celtics -4.0', odds: '-110', edgeScore: 87, detail: 'Net Rating +8.4 | Defensive Edge' },
+                { matchup: 'Denver Nuggets vs Phoenix Suns', selection: 'Denver Nuggets Moneyline', odds: '-106', edgeScore: 95, detail: 'Home Court Efficiency 91%' },
+                { matchup: 'Golden State Warriors vs LA Lakers', selection: 'Under 228.5 Points', odds: '-110', edgeScore: 84, detail: 'Pace Slowdown Trend' }
+            ],
+            MLB: [
+                { matchup: 'LA Dodgers vs San Diego Padres', selection: 'LA Dodgers -1.5', odds: '-105', edgeScore: 90, detail: 'Starting Pitching ERA Edge' },
+                { matchup: 'Atlanta Braves vs NY Mets', selection: 'Over 8.5 Runs', odds: '-110', edgeScore: 85, detail: 'Bullpen Fatigue Rating' }
+            ]
+        };
+
+        const sportIcons = {
+            NFL: '🏈',
+            NHL: '🏒',
+            NBA: '🏀',
+            MLB: '⚾'
+        };
+
+        // Initialize App
+        window.onload = function() {
+            lucide.createIcons();
+            updateTrackerTable();
+            calculateMetrics();
+        };
+
+        // Core Algorithm: Run Daily Fatty Scan
+        function runFattyScan() {
+            const btn = document.getElementById('scanBtn');
+            const btnText = document.getElementById('scanBtnText');
+            
+            // UI Loading State
+            btn.disabled = true;
+            btnText.innerText = 'SCANNING CROSS-SPORT LINES...';
+            btn.classList.add('opacity-80');
+
+            setTimeout(() => {
+                // 1. Pick 3 distinct sports
+                const availableSports = ['NFL', 'NHL', 'NBA', 'MLB'];
+                const shuffledSports = availableSports.sort(() => 0.5 - Math.random()).slice(0, 3);
+
+                // 2. Extract 1 candidate from each selected sport
+                const candidates = shuffledSports.map(sport => {
+                    const games = mockSportsData[sport];
+                    const pickedGame = games[Math.floor(Math.random() * games.length)];
+                    return {
+                        sport: sport,
+                        icon: sportIcons[sport],
+                        matchup: pickedGame.matchup,
+                        selection: pickedGame.selection,
+                        odds: pickedGame.odds,
+                        edgeScore: pickedGame.edgeScore,
+                        detail: pickedGame.detail
+                    };
+                });
+
+                // 3. Fatty Rodriguez Stage 2: Evaluate & Rank Candidates by Edge Score
+                candidates.sort((a, b) => b.edgeScore - a.edgeScore);
+
+                // Top 2 are Selected, 3rd is Excluded
+                candidates[0].isSelected = true;
+                candidates[1].isSelected = true;
+                candidates[2].isSelected = false;
+
+                currentGeneratedPicks = candidates;
+
+                // Render Pick Cards
+                renderPickCards(candidates);
+
+                // Reset Button UI
+                btn.disabled = false;
+                btnText.innerText = 'RUN FATTY SCAN';
+                btn.classList.remove('opacity-80');
+
+                // Update Scan Timestamp
+                const now = new Date();
+                document.getElementById('lastScanTime').innerText = `Last Scan: ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                document.getElementById('selectionSummary').classList.remove('hidden');
+
+            }, 700);
+        }
+
+        // Render Cards View
+        function renderPickCards(picks) {
+            const container = document.getElementById('picksContainer');
+            container.innerHTML = '';
+
+            picks.forEach((pick, index) => {
+                const card = document.createElement('div');
+                const isTop2 = pick.isSelected;
+
+                card.className = `relative rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between space-y-4 ${
+                    isTop2 
+                        ? 'bg-brand-card border-2 border-brand-green/80 shadow-lg glow-green' 
+                        : 'bg-brand-card/60 border border-slate-800 opacity-70 hover:opacity-100'
+                }`;
+
+                card.innerHTML = `
+                    <div class="space-y-3">
+                        <!-- Top Header Badge -->
+                        <div class="flex items-center justify-between">
+                            <span class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-brand-accent text-xs font-semibold text-slate-200">
+                                <span>${pick.icon}</span>
+                                <span>${pick.sport}</span>
+                            </span>
+                            ${isTop2 
+                                ? `<span class="bg-brand-green text-black text-[11px] font-black px-2.5 py-0.5 rounded-full flex items-center space-x-1">
+                                     <i data-lucide="star" class="w-3 h-3 fill-black"></i>
+                                     <span>BEST 2 PLAY</span>
+                                   </span>`
+                                : `<span class="bg-slate-800 text-slate-400 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">EXCLUDED LEG</span>`
+                            }
+                        </div>
+
+                        <!-- Matchup & Selection -->
+                        <div>
+                            <div class="text-xs text-slate-400 font-medium">${pick.matchup}</div>
+                            <div class="text-lg font-black text-slate-100 mt-0.5 flex items-baseline justify-between">
+                                <span>${pick.selection}</span>
+                                <span class="font-mono text-brand-green text-base">${pick.odds}</span>
+                            </div>
+                        </div>
+
+                        <!-- Rating & Edge Details -->
+                        <div class="bg-brand-dark/80 rounded-xl p-3 border border-brand-border/50 space-y-1.5">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">Matchup Rating</span>
+                                <span class="font-mono font-bold ${isTop2 ? 'text-brand-green' : 'text-slate-400'}">${pick.edgeScore}/100</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                <div class="h-1.5 rounded-full ${isTop2 ? 'bg-brand-green' : 'bg-slate-600'}" style="width: ${pick.edgeScore}%"></div>
+                            </div>
+                            <div class="text-[11px] text-slate-500 font-mono pt-1">${pick.detail}</div>
+                        </div>
+                    </div>
+
+                    <!-- Card Footer Status -->
+                    <div class="pt-2 border-t border-brand-border/40 flex items-center justify-between text-xs">
+                        <span class="text-slate-500">Target Line: -110 Range</span>
+                        <span class="font-mono font-semibold ${isTop2 ? 'text-brand-green' : 'text-slate-500'}">
+                            ${isTop2 ? `Stake: $${unitSize.toFixed(2)}` : 'Pass'}
+                        </span>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        // Log Picks to Bet History Tracker
+        function logCurrentPicks() {
+            if (!currentGeneratedPicks) return;
+
+            const selected = currentGeneratedPicks.filter(p => p.isSelected);
+            const excluded = currentGeneratedPicks.find(p => !p.isSelected);
+
+            const newEntry = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                best2: selected.map(s => `${s.selection} (${s.odds})`),
+                excluded: `${excluded.selection} (${excluded.odds})`,
+                odds: selected.map(s => s.odds).join(' / '),
+                stake: unitSize,
+                status: 'PENDING',
+                pl: 0.00
+            };
+
+            betHistory.unshift(newEntry);
+            updateTrackerTable();
+            calculateMetrics();
+
+            // Smooth Scroll to Tracker
+            document.getElementById('trackerTableBody').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Render Table Rows
+        function updateTrackerTable() {
+            const tbody = document.getElementById('trackerTableBody');
+            tbody.innerHTML = '';
+
+            if (betHistory.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="p-8 text-center text-slate-500 font-sans">
+                            No Fatty Rodriguez bets logged yet. Click "Run Fatty Scan" to generate plays.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            betHistory.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-brand-card/50 transition';
+
+                let statusBadge = '';
+                if (item.status === 'WIN') {
+                    statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">WIN</span>`;
+                } else if (item.status === 'LOSS') {
+                    statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded font-bold">LOSS</span>`;
+                } else {
+                    statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded font-bold animate-pulse">PENDING</span>`;
+                }
+
+                let plFormatted = '-';
+                if (item.status === 'WIN') plFormatted = `<span class="text-emerald-400 font-bold">+$${item.pl.toFixed(2)}</span>`;
+                if (item.status === 'LOSS') plFormatted = `<span class="text-rose-400 font-bold">-$${Math.abs(item.pl).toFixed(2)}</span>`;
+
+                tr.innerHTML = `
+                    <td class="p-4 text-slate-400">${item.date}</td>
+                    <td class="p-4 font-sans font-semibold text-slate-200">
+                        <div class="space-y-0.5">
+                            <div>1. ${item.best2[0]}</div>
+                            <div>2. ${item.best2[1]}</div>
+                        </div>
+                    </td>
+                    <td class="p-4 text-slate-500">${item.excluded}</td>
+                    <td class="p-4 text-slate-400">${item.odds}</td>
+                    <td class="p-4 font-bold">$${item.stake.toFixed(2)}</td>
+                    <td class="p-4">${statusBadge}</td>
+                    <td class="p-4 text-right">${plFormatted}</td>
+                    <td class="p-4 text-center">
+                        <button onclick="openResultModal(${item.id})" class="p-1.5 bg-brand-accent hover:bg-slate-700 rounded text-slate-300 transition">
+                            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            lucide.createIcons();
+        }
+
+        // Modal Controls
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function openResultModal(id) {
+            document.getElementById('editingLogId').value = id;
+            openModal('resultModal');
+        }
+
+        // Settle Wager Outcome
+        function settleBet(result) {
+            const id = parseInt(document.getElementById('editingLogId').value);
+            const item = betHistory.find(b => b.id === id);
+
+            if (item) {
+                item.status = result;
+                if (result === 'WIN') {
+                    // Typical payout at -110 on $2 wager is +$1.82
+                    item.pl = item.stake * 0.909;
+                } else if (result === 'LOSS') {
+                    item.pl = -item.stake;
+                }
+            }
+
+            closeModal('resultModal');
+            updateTrackerTable();
+            calculateMetrics();
+        }
+
+        // Recalculate Metrics (Total P/L, ROI %, Win Rate)
+        function calculateMetrics() {
+            let totalPL = 0;
+            let wins = 0;
+            let losses = 0;
+            let totalStaked = 0;
+
+            betHistory.forEach(item => {
+                if (item.status === 'WIN') {
+                    totalPL += item.pl;
+                    wins++;
+                    totalStaked += item.stake;
+                } else if (item.status === 'LOSS') {
+                    totalPL += item.pl;
+                    losses++;
+                    totalStaked += item.stake;
+                }
+            });
+
+            const totalSettled = wins + losses;
+            const winRate = totalSettled > 0 ? ((wins / totalSettled) * 100).toFixed(1) : '0.0';
+            const roi = totalStaked > 0 ? ((totalPL / totalStaked) * 100).toFixed(1) : '0.0';
+
+            // Update UI Elements
+            document.getElementById('unitDisplay').innerText = `$${unitSize.toFixed(2)}`;
+            
+            const plDisplay = document.getElementById('totalPL');
+            plDisplay.innerText = `${totalPL >= 0 ? '+' : ''}$${totalPL.toFixed(2)}`;
+            plDisplay.className = `text-2xl font-bold font-mono ${totalPL >= 0 ? 'text-brand-green' : 'text-rose-400'}`;
+
+            document.getElementById('roiDisplay').innerText = `${roi}% ROI`;
+            document.getElementById('recordDisplay').innerText = `${wins}W - ${losses}L`;
+            document.getElementById('winrateDisplay').innerText = `${winRate}% Winrate`;
+        }
+
+        // Save Custom Rules
+        function saveSettings() {
+            const newUnit = parseFloat(document.getElementById('inputUnitSize').value);
+            const minO = document.getElementById('inputMinOdds').value;
+            const maxO = document.getElementById('inputMaxOdds').value;
+
+            if (!isNaN(newUnit) && newUnit > 0) {
+                unitSize = newUnit;
+            }
+
+            minOdds = minO;
+            maxOdds = maxO;
+
+            document.getElementById('oddsRangeDisplay').innerText = `${minOdds} to ${maxOdds}`;
+            
+            calculateMetrics();
+            closeModal('settingsModal');
+        }
+
+        // Clear History
+        function clearHistory() {
+            if (confirm("Are you sure you want to clear the bet tracker history?")) {
+                betHistory = [];
+                updateTrackerTable();
+                calculateMetrics();
+            }
+        }
+    </script>
+</body>
+</html>
