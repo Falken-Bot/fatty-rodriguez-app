@@ -4,7 +4,6 @@ from datetime import datetime
 import zoneinfo
 from supabase import create_client, Client
 
-# --- 1. CONFIGURATION ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
@@ -21,20 +20,20 @@ SPORTS_LIST = [
 ]
 
 def get_today_str_et():
-    """Returns today's date formatted as YYYY-MM-DD in US Eastern Time."""
+    """Returns today's date in US Eastern Time (YYYY-MM-DD)."""
     et_tz = zoneinfo.ZoneInfo("America/New_York")
     return datetime.now(et_tz).strftime("%Y-%m-%d")
 
 def check_existing_today_parlay(today_str):
-    """Checks if today's parlay has already been generated and locked."""
+    """Checks Supabase to see if today's parlay is already locked."""
     try:
         res = supabase.table('bets').select('*').eq('event_date', today_str).execute()
         if res.data and len(res.data) >= 2:
-            print(f"Today's parlay ({today_str}) is ALREADY LOCKED. Skipping regeneration.")
-            return True
+            print(f"Today's parlay ({today_str}) is ALREADY LOCKED in Supabase. Skipping.")
+            return True, res.data
     except Exception as e:
         print(f"Error checking existing bets: {e}")
-    return False
+    return False, []
 
 def fetch_odds(sport_key):
     url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american"
@@ -47,22 +46,22 @@ def fetch_odds(sport_key):
         return []
 
 def filter_fatty_picks(data, today_str, target_min=-115, target_max=-105):
-    """Filters events strictly occurring TODAY in Eastern Time near -110 odds."""
+    """STRICT RULE: Only selects games scheduled for TODAY in Eastern Time."""
     qualified = []
     et_tz = zoneinfo.ZoneInfo("America/New_York")
 
     for game in data:
-        # Parse commence time and convert to US Eastern Time
+        # Convert game commencement time to US Eastern Time
         commence_utc = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
         commence_et = commence_utc.astimezone(et_tz)
         game_date_et = commence_et.strftime("%Y-%m-%d")
 
-        # STRICT RULE: Must be a game played TODAY
+        # REJECT any game that is not taking place TODAY
         if game_date_et != today_str:
             continue
 
         for bookmaker in game.get('bookmakers', []):
-            if bookmaker['key'] == 'draftkings': # Standardized reference book
+            if bookmaker['key'] == 'draftkings':
                 for market in bookmaker.get('markets', []):
                     if market['key'] == 'h2h':
                         for outcome in market['outcomes']:
@@ -80,7 +79,7 @@ def select_top_two(candidates):
     if len(candidates) < 2:
         print("Not enough qualified same-day legs near -110 found today.")
         return []
-    # Sort candidates by closest distance to standard -110 odds
+    # Rank candidates by closeness to standard -110 odds
     candidates.sort(key=lambda x: abs(x['odds'] + 110))
     return candidates[:2]
 
@@ -89,7 +88,9 @@ if __name__ == "__main__":
     print(f"Running Fatty Rodriguez Scanner for Date: {today_str} (ET)")
     
     # 1. Check if today's parlay is already locked
-    if not check_existing_today_parlay(today_str):
+    is_locked, existing_bets = check_existing_today_parlay(today_str)
+    
+    if not is_locked:
         all_candidates = []
         for sport in SPORTS_LIST:
             raw = fetch_odds(sport)
@@ -111,6 +112,6 @@ if __name__ == "__main__":
                     "status": 'pending'
                 })
             supabase.table('bets').insert(records).execute()
-            print(f"Successfully locked today's same-day 2-leg parlay for {today_str}!")
+            print(f"Successfully locked today's SAME-DAY 2-leg parlay for {today_str}!")
         else:
-            print("Could not form a 2-leg parlay strictly from today's games.")
+            print("Could not find 2 qualified legs strictly taking place today.")
