@@ -4,9 +4,10 @@ from datetime import datetime
 import zoneinfo
 from supabase import create_client, Client
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
+# Strip trailing spaces/newlines from secret keys automatically
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "").strip()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -20,23 +21,22 @@ SPORTS_LIST = [
 ]
 
 def get_today_str_et():
-    """Returns today's date in US Eastern Time (YYYY-MM-DD)."""
+    """Returns today's date formatted as YYYY-MM-DD in US Eastern Time."""
     et_tz = zoneinfo.ZoneInfo("America/New_York")
     return datetime.now(et_tz).strftime("%Y-%m-%d")
 
 def check_existing_today_parlay(today_str):
-    """Checks Supabase to see if today's parlay is already locked."""
     try:
         res = supabase.table('bets').select('*').eq('event_date', today_str).execute()
         if res.data and len(res.data) >= 2:
-            print(f"Today's parlay ({today_str}) is ALREADY LOCKED in Supabase. Skipping.")
-            return True, res.data
+            print(f"Today's parlay ({today_str}) is ALREADY LOCKED in Supabase.")
+            return True
     except Exception as e:
         print(f"Error checking existing bets: {e}")
-    return False, []
+    return False
 
 def fetch_odds(sport_key):
-    url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american"
+    url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american"
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -45,52 +45,55 @@ def fetch_odds(sport_key):
         print(f"Error fetching odds for {sport_key}: {e}")
         return []
 
-def filter_fatty_picks(data, today_str, target_min=-115, target_max=-105):
-    """STRICT RULE: Only selects games scheduled for TODAY in Eastern Time."""
+def filter_fatty_picks(data, today_str, target_min=-130, target_max=110):
     qualified = []
     et_tz = zoneinfo.ZoneInfo("America/New_York")
 
     for game in data:
-        # Convert game commencement time to US Eastern Time
         commence_utc = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
         commence_et = commence_utc.astimezone(et_tz)
         game_date_et = commence_et.strftime("%Y-%m-%d")
 
-        # REJECT any game that is not taking place TODAY
         if game_date_et != today_str:
             continue
 
         for bookmaker in game.get('bookmakers', []):
-            if bookmaker['key'] == 'draftkings':
-                for market in bookmaker.get('markets', []):
-                    if market['key'] == 'h2h':
-                        for outcome in market['outcomes']:
-                            price = outcome['price']
-                            if target_min <= price <= target_max:
-                                qualified.append({
-                                    'sport': game['sport_title'],
-                                    'matchup': f"{game['home_team']} vs {game['away_team']}",
-                                    'pick': outcome['name'],
-                                    'odds': price
-                                })
+            for market in bookmaker.get('markets', []):
+                for outcome in market.get('outcomes', []):
+                    price = outcome.get('price')
+                    if price and (target_min <= price <= target_max):
+                        pick_label = outcome['name']
+                        if 'point' in outcome:
+                            pick_label += f" ({outcome['point']:+g})"
+
+                        qualified.append({
+                            'sport': game['sport_title'],
+                            'matchup': f"{game['home_team']} vs {game['away_team']}",
+                            'pick': pick_label,
+                            'odds': price
+                        })
     return qualified
 
 def select_top_two(candidates):
     if len(candidates) < 2:
-        print("Not enough qualified same-day legs near -110 found today.")
+        print("Not enough qualified same-day legs found.")
         return []
-    # Rank candidates by closeness to standard -110 odds
-    candidates.sort(key=lambda x: abs(x['odds'] + 110))
-    return candidates[:2]
+    
+    unique_candidates = []
+    seen_matchups = set()
+    for c in candidates:
+        if c['matchup'] not in seen_matchups:
+            seen_matchups.add(c['matchup'])
+            unique_candidates.append(c)
+
+    unique_candidates.sort(key=lambda x: abs(x['odds'] + 110))
+    return unique_candidates[:2]
 
 if __name__ == "__main__":
     today_str = get_today_str_et()
     print(f"Running Fatty Rodriguez Scanner for Date: {today_str} (ET)")
     
-    # 1. Check if today's parlay is already locked
-    is_locked, existing_bets = check_existing_today_parlay(today_str)
-    
-    if not is_locked:
+    if not check_existing_today_parlay(today_str):
         all_candidates = []
         for sport in SPORTS_LIST:
             raw = fetch_odds(sport)
@@ -98,7 +101,6 @@ if __name__ == "__main__":
 
         best_two = select_top_two(all_candidates)
         
-        # 2. Lock in today's single 2-Leg Parlay ($2 Wager)
         if len(best_two) == 2:
             records = []
             for pick in best_two:
@@ -112,6 +114,6 @@ if __name__ == "__main__":
                     "status": 'pending'
                 })
             supabase.table('bets').insert(records).execute()
-            print(f"Successfully locked today's SAME-DAY 2-leg parlay for {today_str}!")
+            print(f"Successfully locked today's same-day 2-leg parlay for {today_str}!")
         else:
             print("Could not find 2 qualified legs strictly taking place today.")
