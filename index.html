@@ -69,35 +69,48 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between selection:bg-brand-green selection:text-black">
 
-<!-- Top Navigation Header -->
-    <header class="border-b border-brand-border bg-brand-card/80 backdrop-blur sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <!-- Fatty Rodriguez Logo Image -->
-                <img src="logo.png" alt="Fatty Rodriguez" class="h-12 w-12 rounded-lg object-cover shadow-lg border border-brand-green/30 transform -rotate-1">
+<!-- Hero Brand Navigation Header -->
+    <header class="border-b border-brand-border bg-slate-900/90 backdrop-blur sticky top-0 z-40 py-4 shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            
+            <!-- Prominent Logo & Brand Area -->
+            <div class="flex items-center space-x-4 sm:space-x-6">
+                <!-- Large, Highlighted Fatty Rodriguez Artwork -->
+                <div class="relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-amber-500 to-brand-green rounded-2xl blur opacity-40 group-hover:opacity-75 transition duration-300"></div>
+                    <img src="logo.png" alt="Fatty Rodriguez Sports Betting System" class="relative h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 rounded-xl object-cover border-2 border-amber-400/50 shadow-2xl">
+                </div>
                 
                 <div>
-                    <h1 class="text-xl sm:text-2xl font-black tracking-tight flex items-center space-x-2">
-                        <span>FATTY RODRIGUEZ</span>
-                        <span class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-brand-green/10 text-brand-green border border-brand-green/30">v2.4 PRO</span>
-                    </h1>
-                    <p class="text-xs text-slate-400 font-medium">Multi-Sport Daily 3-Pick Engine | Best 2 Selection System</p>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">
+                            FATTY RODRIGUEZ
+                        </h1>
+                        <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-md bg-amber-400/10 text-amber-400 border border-amber-400/30">v2.4 PRO</span>
+                    </div>
+                    <p class="text-sm sm:text-base text-amber-300/90 font-bold tracking-wide mt-0.5">
+                        CROSS-SPORT ANALYTICS & SMART PICK SELECTION
+                    </p>
+                    <p class="text-xs text-slate-400 font-medium hidden sm:block">
+                        Multi-Sport Daily 3-Pick Engine | Best 2 Selection System ($2 Units)
+                    </p>
                 </div>
             </div>
 
-            <div class="flex items-center space-x-3">
-                <button onclick="openModal('settingsModal')" class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-brand-accent hover:bg-slate-700 text-slate-200 text-sm font-medium transition border border-slate-700">
-                    <i data-lucide="sliders" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Rules & Filters</span>
+            <!-- Header Controls -->
+            <div class="flex items-center space-x-3 w-full md:w-auto justify-end">
+                <button onclick="openModal('settingsModal')" class="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-card hover:bg-slate-700 text-slate-200 text-sm font-semibold transition border border-slate-700 shadow-md">
+                    <i data-lucide="sliders" class="w-4 h-4 text-amber-400"></i>
+                    <span>Rules & Filters</span>
                 </button>
-                <button onclick="openModal('deployModal')" class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-brand-green/10 border border-brand-green/30 text-brand-green hover:bg-brand-green/20 text-sm font-medium transition">
+                <button onclick="openModal('deployModal')" class="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-green/10 border border-brand-green/40 text-brand-green hover:bg-brand-green/20 text-sm font-semibold transition shadow-md">
                     <i data-lucide="code-2" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Free API Setup</span>
+                    <span>Free API Setup</span>
                 </button>
             </div>
+
         </div>
     </header>
-
     <!-- Main Content Container -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1 space-y-8">
 
