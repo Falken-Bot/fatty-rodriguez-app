@@ -166,4 +166,158 @@
             </div>
             <div class="space-y-4 text-sm text-slate-300">
                 <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                    <div class="font-bold text-amber-400 mb-1">1. Same
+                    <div class="font-bold text-amber-400 mb-1">1. Same-Day Games Only</div>
+                    <p class="text-xs text-slate-400">The scanner strictly evaluates matches scheduled to begin on today's date in Eastern Time.</p>
+                </div>
+                <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                    <div class="font-bold text-amber-400 mb-1">2. -110 Odds Range</div>
+                    <p class="text-xs text-slate-400">Isolates straight team line options sitting between -115 and -105 standard vig.</p>
+                </div>
+                <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                    <div class="font-bold text-amber-400 mb-1">3. Immutable Lock</div>
+                    <p class="text-xs text-slate-400">Once generated for today's date, the 2-leg parlay locks into Supabase and will not change when re-scanned.</p>
+                </div>
+            </div>
+            <button onclick="closeModal('settingsModal')" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl transition">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // --- 1. SUPABASE CONFIGURATION ---
+        // REPLACE THESE WITH YOUR ACTUAL SUPABASE CREDENTIALS FROM STEP 1
+        const SUPABASE_URL = "YOUR_SUPABASE_URL_HERE";
+        const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
+        
+        // --- GITHUB DISPATCH CONFIGURATION (FOR MANUAL GENERATE BUTTON) ---
+        const GITHUB_USERNAME = "YOUR_GITHUB_USERNAME";
+        const GITHUB_REPO = "fatty-rodriguez-app";
+        const GITHUB_TOKEN = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN";
+
+        let _supabase = null;
+        if (SUPABASE_URL !== "YOUR_SUPABASE_URL_HERE") {
+            _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
+        // Helper: Get Today's Date formatted as YYYY-MM-DD in Eastern Time
+        function getTodayET() {
+            return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        }
+
+        // --- 2. MAIN SCAN & LOCK HANDLER ---
+        async function handleScanButtonClick() {
+            const todayStr = getTodayET();
+            document.getElementById('todayDateDisplay').innerText = todayStr;
+
+            if (!_supabase) {
+                alert("Please replace YOUR_SUPABASE_URL_HERE and YOUR_SUPABASE_ANON_KEY_HERE with your real Supabase credentials inside index.html!");
+                return;
+            }
+
+            try {
+                // Step A: Check Supabase FIRST for today's existing locked parlay
+                const { data: existingBets, error } = await _supabase
+                    .from('bets')
+                    .select('*')
+                    .eq('event_date', todayStr);
+
+                if (error) console.error("Supabase Query Error:", error);
+
+                // Step B: If today's parlay already exists, load it and DO NOT generate new picks
+                if (existingBets && existingBets.length >= 2) {
+                    renderPicksToDashboard(existingBets);
+                    renderBetHistoryTable(existingBets);
+                    return;
+                }
+
+                // Step C: If no parlay exists for today, trigger GitHub Action workflow dispatch
+                alert("No locked parlay found for today yet. Triggering today's daily cloud scan...");
+                await triggerGitHubScan();
+
+            } catch (err) {
+                console.error("Execution error:", err);
+            }
+        }
+
+        // --- 3. TRIGGER GITHUB ACTION WORKFLOW ---
+        async function triggerGitHubScan() {
+            if (GITHUB_TOKEN === "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN") {
+                alert("To use the manual generate button from the browser, add your GitHub Personal Access Token to index.html, or trigger the run manually from the GitHub Actions tab.");
+                return;
+            }
+
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/actions/workflows/daily_scan.yml/dispatches`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ref: 'main' })
+            });
+
+            if (response.ok) {
+                alert("Daily scan command sent to GitHub! The cloud script is picking today's games and locking them in. Refresh the page in ~30 seconds.");
+            } else {
+                alert("Could not trigger GitHub scan automatically. Please check your GitHub token permissions.");
+            }
+        }
+
+        // --- 4. RENDER PICKS TO DASHBOARD ---
+        function renderPicksToDashboard(bets) {
+            const container = document.getElementById('picksContainer');
+            if (!container) return;
+
+            container.innerHTML = bets.map(bet => `
+                <div class="p-5 rounded-2xl bg-slate-950 border border-amber-400/30 shadow-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-black text-amber-400 uppercase tracking-wider bg-amber-400/10 px-2.5 py-1 rounded-md border border-amber-400/20">${bet.sport}</span>
+                        <span class="text-xs font-mono text-slate-400">${bet.event_date}</span>
+                    </div>
+                    <div class="text-xl font-black text-white">${bet.pick}</div>
+                    <div class="text-sm text-slate-300 font-medium">${bet.matchup}</div>
+                    <div class="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
+                        <span class="font-mono text-emerald-400 font-bold">Odds: ${bet.odds > 0 ? '+' + bet.odds : bet.odds}</span>
+                        <span class="font-mono text-amber-400 font-bold">Wager: $${bet.wager_amount}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- 5. RENDER BET HISTORY TABLE ---
+        function renderBetHistoryTable(bets) {
+            const tbody = document.getElementById('betHistoryTable');
+            if (!tbody || !bets.length) return;
+
+            tbody.innerHTML = bets.map(bet => `
+                <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono text-xs">${bet.event_date}</td>
+                    <td class="py-3 px-4 uppercase text-xs text-amber-400 font-bold">${bet.sport}</td>
+                    <td class="py-3 px-4">${bet.matchup}</td>
+                    <td class="py-3 px-4 font-bold text-white">${bet.pick}</td>
+                    <td class="py-3 px-4 font-mono">${bet.odds}</td>
+                    <td class="py-3 px-4 font-mono">$${bet.wager_amount}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold uppercase ${bet.status === 'win' ? 'bg-emerald-500/20 text-emerald-400' : bet.status === 'loss' ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-300'}">
+                            ${bet.status}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- 6. MODAL CONTROL HELPERS ---
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // --- 7. INITIALIZE ON PAGE LOAD ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            document.getElementById('todayDateDisplay').innerText = getTodayET();
+            handleScanButtonClick();
+        });
+    </script>
+</body>
+</html>
