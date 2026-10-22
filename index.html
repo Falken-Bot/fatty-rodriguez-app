@@ -292,6 +292,20 @@
         }
 
         function parseBets(betsList) {
+            // Priority 1: Check for single combined record storing all 3 legs via '||'
+            const newest = betsList[0];
+            const rawPick = newest ? (newest.pick || '') : '';
+
+            if (rawPick.includes('||')) {
+                const parts = rawPick.split('||');
+                return {
+                    l1: parts[0] ? parts[0].replace(/LEG1?:/, '').trim() : 'Active Leg 1',
+                    l2: parts[1] ? parts[1].replace(/LEG2?:/, '').trim() : 'Active Leg 2',
+                    l3: parts[2] ? parts[2].replace(/DROPPED:/, '').trim() : 'Leg 3 (Distilled Out)'
+                };
+            }
+
+            // Priority 2: If stored as separate rows in database
             if (betsList.length >= 2) {
                 const b1 = betsList[0];
                 const b2 = betsList[1];
@@ -303,19 +317,9 @@
                 };
             }
 
-            const rawPick = betsList[0].pick || '';
-            if (rawPick.includes('||')) {
-                const parts = rawPick.split('||');
-                return {
-                    l1: parts[0] ? parts[0].replace(/LEG1?:/, '').trim() : 'Active Leg 1',
-                    l2: parts[1] ? parts[1].replace(/LEG2?:/, '').trim() : 'Active Leg 2',
-                    l3: parts[2] ? parts[2].replace(/DROPPED:/, '').trim() : 'Leg 3 (Distilled Out)'
-                };
-            }
-
-            const b = betsList[0];
+            // Fallback for single old record
             return {
-                l1: `${b.sport || 'Sports'} | ${b.matchup || ''} | Pick: ${b.pick || ''} (${b.odds > 0 ? '+' : ''}${b.odds})`,
+                l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
                 l2: 'Awaiting next automated cross-sport scan...',
                 l3: 'Candidate Leg 3 distilled out during market evaluation.'
             };
@@ -325,7 +329,9 @@
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
 
-            let url = `${SUPABASE_URL}/rest/v1/bets?event_date=like.${todayStr}*&select=*`;
+            // Fetch newest records by ID descending to ensure latest scan is loaded
+            const cacheBuster = new Date().getTime();
+            let url = `${SUPABASE_URL}/rest/v1/bets?event_date=like.${todayStr}*&select=*&order=id.desc&_cb=${cacheBuster}`;
             
             try {
                 let response = await fetch(url, {
@@ -336,8 +342,9 @@
                 });
                 let bets = await response.json();
 
+                // Fallback query if exact date filter returns nothing
                 if (!Array.isArray(bets) || bets.length === 0) {
-                    const fallbackUrl = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=3`;
+                    const fallbackUrl = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=3&_cb=${cacheBuster}`;
                     response = await fetch(fallbackUrl, {
                         headers: {
                             "apikey": SUPABASE_KEY,
@@ -415,7 +422,7 @@
                             statusDiv.innerText = `Scan triggered successfully. Refreshing card in ${secondsLeft}s...`;
                         } else {
                             clearInterval(timer);
-                            location.reload();
+                            location.reload(true);
                         }
                     }, 1000);
                 } else {
