@@ -3,8 +3,8 @@ import sys
 import requests
 from datetime import datetime
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ejnwsxbpuumcpyxnmsaz.supabase.co").strip().rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp").strip()
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "").strip()
 
 if "/rest/v1" in SUPABASE_URL:
@@ -81,7 +81,7 @@ def distill_parlay_package(candidates):
 
     top_three = unique[:3]
 
-    # Enforce cross-sport requirement in top three
+    # Enforce cross-sport requirement
     sports_present = {c['sport'] for c in top_three}
     if len(sports_present) < 2:
         alt_candidate = next((c for c in unique[3:] if c['sport'] not in sports_present), None)
@@ -91,7 +91,6 @@ def distill_parlay_package(candidates):
             print("Could not satisfy cross-sport requirement: only one sport available today.")
             return None
 
-    # Identify active legs vs distilled out leg
     active_legs = top_three[:2]
     dropped_leg = top_three[2]
 
@@ -117,7 +116,7 @@ def save_parlay_direct_http(record):
     
     res = requests.post(target_endpoint, json=[record], headers=headers)
     if res.status_code in [200, 201]:
-        print("SUCCESS: Successfully saved distilled 2-leg $2 parlay package to Supabase!")
+        print("SUCCESS: Successfully saved distilled cross-sport parlay package to Supabase!")
     else:
         print(f"Supabase HTTP Error ({res.status_code}): {res.text}")
 
@@ -133,13 +132,20 @@ if __name__ == "__main__":
     parlay_pkg = distill_parlay_package(all_candidates)
     
     if parlay_pkg:
-        # Save as a single combined record storing both active legs and the distilled leg
+        l1 = parlay_pkg['active_legs'][0]
+        l2 = parlay_pkg['active_legs'][1]
+        l3 = parlay_pkg['dropped_leg']
+
+        fmt_l1 = f"{l1['sport']} | {l1['matchup']} | Pick: {l1['pick']} ({'+' if l1['odds']>0 else ''}{l1['odds']})"
+        fmt_l2 = f"{l2['sport']} | {l2['matchup']} | Pick: {l2['pick']} ({'+' if l2['odds']>0 else ''}{l2['odds']})"
+        fmt_l3 = f"{l3['sport']} | {l3['matchup']} | Pick: {l3['pick']} ({'+' if l3['odds']>0 else ''}{l3['odds']})"
+
         record = {
             "event_date": today_str,
             "sport": "CROSS-SPORT PARLAY",
-            "matchup": f"PARLAY: {parlay_pkg['active_legs'][0]['matchup']} | {parlay_pkg['active_legs'][1]['matchup']}",
-            "pick": f"LEG 1: {parlay_pkg['active_legs'][0]['sport']} - {parlay_pkg['active_legs'][0]['pick']} ({parlay_pkg['active_legs'][0]['odds']}) || LEG 2: {parlay_pkg['active_legs'][1]['sport']} - {parlay_pkg['active_legs'][1]['pick']} ({parlay_pkg['active_legs'][1]['odds']}) || DROPPED: {parlay_pkg['dropped_leg']['sport']} - {parlay_pkg['dropped_leg']['pick']} ({parlay_pkg['dropped_leg']['odds']})",
-            "odds": parlay_pkg['active_legs'][0]['odds'],
+            "matchup": f"{l1['sport']} & {l2['sport']}",
+            "pick": f"LEG1: {fmt_l1} || LEG2: {fmt_l2} || DROPPED: {fmt_l3}",
+            "odds": l1['odds'],
             "wager_amount": 2.00,
             "status": "pending"
         }
