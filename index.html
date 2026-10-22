@@ -33,37 +33,83 @@
 <body class="bg-brand-bg text-slate-100 min-h-screen font-sans antialiased selection:bg-amber-400 selection:text-slate-950">
 
     <!-- Streamlined Executive Header Navigation -->
-    <header class="sticky top-0 z-40 border-b border-brand-border bg-brand-bg/90 backdrop-blur-md py-4 shadow-xl">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            
-            <!-- Prominent Logo & Brand Title -->
-            <div class="flex items-center space-x-4">
-                <div class="relative group">
-                    <div class="absolute -inset-1 bg-gradient-to-r from-amber-500 to-emerald-500 rounded-2xl blur opacity-50 group-hover:opacity-100 transition duration-300"></div>
-                    <img src="logo.png" alt="Fatty Rodriguez" class="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover border-2 border-amber-400 shadow-2xl">
-                </div>
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white uppercase">FATTY RODRIGUEZ</h1>
-                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-400/10 text-amber-400 border border-amber-400/30">v2.4 PRO</span>
-                    </div>
-                    <p class="text-xs sm:text-sm font-bold text-amber-400/90 tracking-wide mt-0.5">Cross-Sport Analytics Engine</p>
-                    <p class="text-xs text-slate-400 hidden sm:block">Pick 3 → Best 2 Selection System ($2 Flat Stake)</p>
-                </div>
-            </div>
+<header class="fatty-header">
+  <div class="logo-container">
+    <!-- Streamlined High-Impact SVG Logo Mark -->
+    <svg class="fatty-logo-mark" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FFD700" />
+          <stop offset="100%" stop-color="#FFA500" />
+        </linearGradient>
+      </defs>
+      <!-- Shield Base -->
+      <path d="M60 5L105 20V55C105 82 85 102 60 115C35 102 15 82 15 55V20L60 5Z" fill="#121212" stroke="url(#goldGrad)" stroke-width="4"/>
+      <!-- Inner Accent Lines -->
+      <path d="M60 15L95 27V53C95 76 78 93 60 104C42 93 25 76 25 53V27L60 15Z" stroke="#2A2A2A" stroke-width="2"/>
+      <!-- Monogram 'FR' -->
+      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="url(#goldGrad)" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="42" letter-spacing="-2">FR</text>
+      <!-- Bottom Star / Crown Pin -->
+      <polygon points="60,92 63,98 70,99 65,104 67,110 60,107 53,110 55,104 50,99 57,98" fill="url(#goldGrad)"/>
+    </svg>
+    
+    <div class="brand-title-group">
+      <h1 class="brand-name">FATTY RODRIGUEZ</h1>
+      <span class="brand-tagline">EXECUTIVE SPORTS TERMINAL</span>
+    </div>
+  </div>
+</header>
 
-            <!-- Action Buttons -->
-            <div class="flex items-center space-x-3">
-                <button onclick="handleScanButtonClick()" class="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition shadow-lg border border-emerald-400">
-                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Generate Parlay</span>
-                </button>
-                <button onclick="openModal('settingsModal')" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition border border-slate-700">
-                    <i data-lucide="sliders" class="w-4 h-4 text-amber-400"></i>
-                </button>
-            </div>
-
-        </div>
+<style>
+  .fatty-header {
+    background: #0a0a0c;
+    border-bottom: 2px solid #FFD700;
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  }
+  
+  .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .fatty-logo-mark {
+    width: 64px;
+    height: 64px;
+    filter: drop-shadow(0 4px 10px rgba(255, 215, 0, 0.3));
+  }
+  
+  .brand-title-group {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .brand-name {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 900;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: #FFFFFF;
+    margin: 0;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, #FFFFFF 60%, #FFD700 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .brand-tagline {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: #FFD700;
+    margin-top: 2px;
+    text-transform: uppercase;
+  }
+</style>
     </header>
 
     <!-- Main Dashboard Container -->
