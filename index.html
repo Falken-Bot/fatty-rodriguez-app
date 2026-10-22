@@ -214,10 +214,25 @@
         const SUPABASE_URL = "https://ejnwsxbpuumcpyxnmsaz.supabase.co/rest/v1";
         const SUPABASE_KEY = "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp";
 
-        document.getElementById('current-date-display').innerText = new Date().toISOString().split('T')[0];
+        function getTodayStrET() {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            const parts = formatter.formatToParts(now);
+            const m = parts.find(p => p.type === 'month').value;
+            const d = parts.find(p => p.type === 'day').value;
+            const y = parts.find(p => p.type === 'year').value;
+            return `${y}-${m}-${d}`;
+        }
 
         async function loadTodayBets() {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getTodayStrET();
+            document.getElementById('current-date-display').innerText = todayStr;
+
             const url = `${SUPABASE_URL}/rest/v1/bets?event_date=eq.${todayStr}&select=*`;
             
             try {
@@ -230,7 +245,7 @@
                 const bets = await response.json();
                 
                 const container = document.getElementById('parlay-container');
-                if (bets && bets.length > 0) {
+                if (Array.isArray(bets) && bets.length > 0) {
                     container.innerHTML = bets.map(b => `
                         <div class="bet-card">
                             <h3>${b.sport}</h3>
