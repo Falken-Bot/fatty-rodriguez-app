@@ -327,9 +327,10 @@
             document.getElementById('current-date-display').innerText = todayStr;
 
             const cacheBuster = new Date().getTime();
-            // Pull the absolute latest saved row directly by ID
             let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1&_cb=${cacheBuster}`;
             
+            const container = document.getElementById('parlay-container');
+
             try {
                 let response = await fetch(url, {
                     headers: {
@@ -337,9 +338,20 @@
                         "Authorization": `Bearer ${SUPABASE_KEY}`
                     }
                 });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    container.innerHTML = `
+                        <div class="parlay-card" style="border-left-color: #FF4D4D;">
+                            <h3 style="color: #FF4D4D;">SUPABASE FETCH ERROR (${response.status})</h3>
+                            <p>${errText}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
                 let bets = await response.json();
                 
-                const container = document.getElementById('parlay-container');
                 if (Array.isArray(bets) && bets.length > 0) {
                     const parsed = parseBets(bets);
 
@@ -373,15 +385,16 @@
                 } else {
                     container.innerHTML = `
                         <div class="parlay-card">
-                            <p>No bets stored in database. Click generate below to run a scan.</p>
+                            <p>No bets returned from database query.</p>
                         </div>
                     `;
                 }
             } catch (err) {
                 console.error("Error loading bets:", err);
-                document.getElementById('parlay-container').innerHTML = `
-                    <div class="parlay-card">
-                        <p>Error connecting to database. Verify credentials in index.html.</p>
+                container.innerHTML = `
+                    <div class="parlay-card" style="border-left-color: #FF4D4D;">
+                        <h3 style="color: #FF4D4D;">JAVASCRIPT EXCEPTION</h3>
+                        <p>${err.message}</p>
                     </div>
                 `;
             }
