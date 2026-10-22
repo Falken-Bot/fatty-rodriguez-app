@@ -294,9 +294,14 @@
         }
 
         function parseBets(betsList) {
+            if (!Array.isArray(betsList) || betsList.length === 0) {
+                return { l1: 'No active legs found', l2: 'No active legs found', l3: 'None' };
+            }
+
             const newest = betsList[0];
             const rawPick = newest ? (newest.pick || '') : '';
 
+            // Format A: Unified combined string with '||'
             if (rawPick.includes('||')) {
                 const parts = rawPick.split('||');
                 return {
@@ -306,15 +311,28 @@
                 };
             }
 
+            // Format B: Multiple separate database rows
+            if (betsList.length >= 2) {
+                const b1 = betsList[0];
+                const b2 = betsList[1];
+                const b3 = betsList[2] || null;
+                return {
+                    l1: `${b1.sport || 'Sports'} | ${b1.matchup || ''} | Pick: ${b1.pick || ''} (${b1.odds > 0 ? '+' : ''}${b1.odds})`,
+                    l2: `${b2.sport || 'Sports'} | ${b2.matchup || ''} | Pick: ${b2.pick || ''} (${b2.odds > 0 ? '+' : ''}${b2.odds})`,
+                    l3: b3 ? `${b3.sport || 'Sports'} | ${b3.matchup || ''} | Pick: ${b3.pick || ''} (${b3.odds > 0 ? '+' : ''}${b3.odds})` : 'Candidate Leg 3 distilled out during odds filtering.'
+                };
+            }
+
+            // Format C: Single legacy row fallback
             return {
                 l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
-                l2: 'Run a new scan above to generate a fresh cross-sport parlay package.',
-                l3: 'Candidate Leg 3 distilled out during odds filtering.'
+                l2: 'Single leg record detected. Run a fresh scan to populate dual legs.',
+                l3: 'Candidate Leg 3 distilled out during market evaluation.'
             };
         }
 
-        async function fetchLatestRow() {
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1`;
+        async function fetchLatestRows() {
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=3`;
             let response = await fetch(url, {
                 cache: 'no-store',
                 headers: {
@@ -326,7 +344,7 @@
                 throw new Error(`Supabase Error ${response.status}: ${await response.text()}`);
             }
             let bets = await response.json();
-            return (Array.isArray(bets) && bets.length > 0) ? bets[0] : null;
+            return Array.isArray(bets) ? bets : [];
         }
 
         async function loadTodayBets() {
@@ -335,10 +353,10 @@
             const container = document.getElementById('parlay-container');
 
             try {
-                const latest = await fetchLatestRow();
-                if (latest) {
-                    currentLatestId = latest.id;
-                    const parsed = parseBets([latest]);
+                const bets = await fetchLatestRows();
+                if (bets.length > 0) {
+                    currentLatestId = bets[0].id;
+                    const parsed = parseBets(bets);
 
                     container.innerHTML = `
                         <div class="parlay-card">
@@ -412,8 +430,8 @@
                     statusDiv.innerText = `Scanning markets in cloud... (${elapsedSeconds}s elapsed)`;
 
                     try {
-                        const newLatest = await fetchLatestRow();
-                        if (newLatest && newLatest.id !== initialId) {
+                        const newBets = await fetchLatestRows();
+                        if (newBets.length > 0 && newBets[0].id !== initialId) {
                             clearInterval(pollInterval);
                             statusDiv.innerText = "New parlay locked! Updating terminal...";
                             setTimeout(() => location.reload(true), 1000);
