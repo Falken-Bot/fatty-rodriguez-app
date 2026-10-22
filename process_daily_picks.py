@@ -10,9 +10,12 @@ ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "").strip()
 if "/rest/v1" in SUPABASE_URL:
     SUPABASE_URL = SUPABASE_URL.split("/rest/v1")[0]
 
+# Expanded list of major US sports markets
 SPORTS_LIST = [
     "americanfootball_nfl",
+    "americanfootball_ncaaf",
     "basketball_nba",
+    "basketball_ncaab",
     "icehockey_nhl",
     "baseball_mlb"
 ]
@@ -64,38 +67,37 @@ def build_distilled_cross_sport_parlay(candidates):
         print("No qualified candidates found today.")
         return None
 
-    # Step 1: Group candidates by Sport and deduplicate by matchup
+    # Group candidates by sport and deduplicate matchups
     by_sport = {}
     for c in candidates:
         sport = c['sport']
         if sport not in by_sport:
             by_sport[sport] = []
         
-        # Avoid duplicate matchups within the same sport
         if not any(existing['matchup'] == c['matchup'] for existing in by_sport[sport]):
             by_sport[sport].append(c)
 
-    # Sort each sport's candidates by proximity to -110 even money baseline
+    # Sort candidates in each sport by proximity to -110 even money line
     for sport in by_sport:
         by_sport[sport].sort(key=lambda x: abs(x['odds'] + 110))
 
     available_sports = list(by_sport.keys())
+    print(f"Active sports available today with valid odds: {available_sports}")
+
     if len(available_sports) < 2:
-        print(f"FAILED: Need at least 2 distinct sports available today, but only found {len(available_sports)} ({available_sports}).")
+        print(f"CRITICAL: Cannot build cross-sport parlay. Found only 1 active sport today ({available_sports}).")
         return None
 
-    # Step 2: Pick best candidate from Sport A and best candidate from Sport B
+    # Force Leg 1 from Sport 1, Leg 2 from Sport 2
     leg1 = by_sport[available_sports[0]][0]
     leg2 = by_sport[available_sports[1]][0]
 
-    # Step 3: Find a distinct candidate for the Distilled Leg (Leg 3)
+    # Find a distinct candidate for Leg 3 (Distilled Out)
     leg3 = None
-    
-    # Try a 3rd sport first if available
     if len(available_sports) >= 3 and len(by_sport[available_sports[2]]) > 0:
         leg3 = by_sport[available_sports[2]][0]
     else:
-        # Otherwise, take the next best distinct matchup from Sport A or Sport B
+        # Fallback to second best matchup in Sport 1 or Sport 2
         for s in available_sports:
             for item in by_sport[s]:
                 if item['matchup'] != leg1['matchup'] and item['matchup'] != leg2['matchup']:
@@ -125,7 +127,7 @@ def save_parlay_direct_http(record):
     
     res = requests.post(target_endpoint, json=[record], headers=headers)
     if res.status_code in [200, 201]:
-        print("SUCCESS: Successfully saved distilled cross-sport parlay package to Supabase!")
+        print("SUCCESS: Saved 2-leg cross-sport parlay package directly to Supabase!")
     else:
         print(f"Supabase HTTP Error ({res.status_code}): {res.text}")
 
