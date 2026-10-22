@@ -19,8 +19,8 @@ export default async function handler(req, res) {
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     const OWNER = process.env.GITHUB_OWNER;
     const REPO = process.env.GITHUB_REPO;
-    const WORKFLOW_ID = 'main.yml'; // <-- CHECK THIS FILENAME MATCHES YOUR GITHUB REPO EXACTLY
-    const BRANCH = 'main';          // <-- CHECK IF YOUR DEFAULT BRANCH IS 'main' OR 'master'
+    const WORKFLOW_ID = 'daily_scan.yml'; // Correct filename
+    const BRANCH = 'main';
 
     if (!GITHUB_TOKEN || !OWNER || !REPO) {
         return res.status(500).json({ 
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
         if (!response.ok) {
             const errorText = await response.text();
             return res.status(response.status).json({ 
-                error: `GitHub 404/Error at [${targetUrl}]: ${errorText}` 
+                error: `GitHub Error at [${targetUrl}]: ${errorText}` 
             });
         }
 
