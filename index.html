@@ -173,12 +173,41 @@
             line-height: 1.4;
         }
 
+        /* History Ledger Styles */
+        .history-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-left: 5px solid var(--text-muted);
+            padding: 18px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .history-legs {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
         .action-panel {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             padding: 25px;
             border-radius: 8px;
             text-align: center;
+            margin-bottom: 40px;
         }
 
         .action-panel p {
@@ -249,6 +278,7 @@
     </header>
 
     <div class="main-container">
+        <!-- Active Parlay Section -->
         <div class="section-title">
             <span>Today's Locked 2-Leg Parlay</span>
             <span id="current-date-display"></span>
@@ -260,10 +290,21 @@
             </div>
         </div>
 
+        <!-- Manual Control Panel -->
         <div class="action-panel">
             <p>Manual control panel for triggering odds scan and parlay selection.</p>
             <button id="generate-btn" class="generate-btn" onclick="triggerManualScan()">Generate Parlay</button>
             <div id="scan-status" class="scan-status-msg"></div>
+        </div>
+
+        <!-- Historical Ledger Section -->
+        <div class="section-title">
+            <span>Historical Ledger & Performance Archive</span>
+        </div>
+        <div id="history-container">
+            <div class="parlay-card">
+                <p>Loading historical ledger...</p>
+            </div>
         </div>
     </div>
 
@@ -293,14 +334,7 @@
             return `${y}-${m}-${d}`;
         }
 
-        function parseBets(betsList) {
-            if (!Array.isArray(betsList) || betsList.length === 0) {
-                return { l1: 'No active legs found', l2: 'No active legs found', l3: 'None' };
-            }
-
-            const newest = betsList[0];
-            const rawPick = newest ? (newest.pick || '') : '';
-
+        function parsePickString(rawPick) {
             if (rawPick.includes('||')) {
                 const parts = rawPick.split('||');
                 return {
@@ -309,16 +343,15 @@
                     l3: parts[2] ? parts[2].replace(/DROPPED:/, '').trim() : 'Leg 3 (Distilled Out)'
                 };
             }
-
             return {
-                l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
-                l2: 'Single-sport legacy format detected.',
-                l3: 'Candidate Leg 3 distilled out during odds filtering.'
+                l1: rawPick,
+                l2: 'Single-sport legacy format.',
+                l3: 'N/A'
             };
         }
 
-        async function fetchLatestRows() {
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=3`;
+        async function fetchAllBets() {
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=15`;
             let response = await fetch(url, {
                 cache: 'no-store',
                 headers: {
@@ -333,54 +366,78 @@
             return Array.isArray(bets) ? bets : [];
         }
 
-        async function loadTodayBets() {
+        async function loadTerminalData() {
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
-            const container = document.getElementById('parlay-container');
+            const parlayContainer = document.getElementById('parlay-container');
+            const historyContainer = document.getElementById('history-container');
 
             try {
-                const bets = await fetchLatestRows();
+                const bets = await fetchAllBets();
                 if (bets.length > 0) {
                     currentLatestId = bets[0].id;
-                    const parsed = parseBets(bets);
-
-                    container.innerHTML = `
+                    
+                    // 1. Render Active Top Parlay (Newest)
+                    const latestParsed = parsePickString(bets[0].pick);
+                    parlayContainer.innerHTML = `
                         <div class="parlay-card">
                             <h3>
                                 <span>FATTY'S 2-LEG PARLAY</span>
-                                <span>$2.00 BASE WAGER</span>
+                                <span>$${Number(bets[0].wager_amount || 2).toFixed(2)} BASE WAGER</span>
                             </h3>
                             
                             <div class="leg-box active-leg">
                                 <div class="leg-label active">PARLAY LEG 1 (ACTIVE)</div>
-                                <div class="leg-details">${parsed.l1}</div>
+                                <div class="leg-details">${latestParsed.l1}</div>
                             </div>
 
                             <div class="leg-box active-leg">
                                 <div class="leg-label active">PARLAY LEG 2 (ACTIVE)</div>
-                                <div class="leg-details">${parsed.l2}</div>
+                                <div class="leg-details">${latestParsed.l2}</div>
                             </div>
 
                             <div class="leg-box cut-leg">
                                 <div class="leg-label cut">DISTILLED OUT (CANDIDATE LEG 3)</div>
-                                <div class="leg-details">${parsed.l3}</div>
+                                <div class="leg-details">${latestParsed.l3}</div>
                             </div>
 
                             <div class="distill-reason">
-                                <strong>Distillation Rationale:</strong> Candidate 3 was distilled out to isolate the highest value 2-leg cross-sport baseline.
+                                <strong>Date:</strong> ${bets[0].event_date} | <strong>Status:</strong> ${bets[0].status.toUpperCase()}
                             </div>
                         </div>
                     `;
+
+                    // 2. Render Historical Ledger (Older records)
+                    if (bets.length > 1) {
+                        let historyHTML = '';
+                        for (let i = 1; i < bets.length; i++) {
+                            const b = bets[i];
+                            historyHTML += `
+                                <div class="history-card">
+                                    <div class="history-header">
+                                        <span>DATE: ${b.event_date} (ID: ${b.id})</span>
+                                        <span>STATUS: ${b.status.toUpperCase()} | WAGER: $${Number(b.wager_amount || 2).toFixed(2)}</span>
+                                    </div>
+                                    <div class="history-legs">${b.pick}</div>
+                                </div>
+                            `;
+                        }
+                        historyContainer.innerHTML = historyHTML;
+                    } else {
+                        historyContainer.innerHTML = `
+                            <div class="history-card">
+                                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">No prior historical records found in ledger yet.</p>
+                            </div>
+                        `;
+                    }
+
                 } else {
-                    container.innerHTML = `
-                        <div class="parlay-card">
-                            <p>No bets returned from database query.</p>
-                        </div>
-                    `;
+                    parlayContainer.innerHTML = `<div class="parlay-card"><p>No bets returned from database query.</p></div>`;
+                    historyContainer.innerHTML = `<div class="history-card"><p>No history available.</p></div>`;
                 }
             } catch (err) {
-                console.error("Error loading bets:", err);
-                container.innerHTML = `
+                console.error("Error loading terminal data:", err);
+                parlayContainer.innerHTML = `
                     <div class="parlay-card" style="border-left-color: #FF4D4D;">
                         <h3 style="color: #FF4D4D;">DATABASE ERROR</h3>
                         <p>${err.message}</p>
@@ -416,7 +473,7 @@
                     elapsedSeconds += 3;
                     
                     try {
-                        const newBets = await fetchLatestRows();
+                        const newBets = await fetchAllBets();
                         if (newBets.length > 0 && newBets[0].id !== initialId) {
                             clearInterval(pollInterval);
                             statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
@@ -431,7 +488,7 @@
                         statusDiv.innerText = `Scanning sportsbooks... (${elapsedSeconds}s elapsed)`;
                     } else {
                         clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan processing. Click refresh or check back shortly.";
+                        statusDiv.innerText = "Scan processing complete.";
                         btn.innerText = "Generate Parlay";
                         btn.disabled = false;
                     }
@@ -445,7 +502,7 @@
             }
         }
 
-        window.onload = loadTodayBets;
+        window.onload = loadTerminalData;
     </script>
 </body>
 </html>
