@@ -301,7 +301,6 @@
             const newest = betsList[0];
             const rawPick = newest ? (newest.pick || '') : '';
 
-            // Format A: Unified combined string with '||'
             if (rawPick.includes('||')) {
                 const parts = rawPick.split('||');
                 return {
@@ -311,23 +310,10 @@
                 };
             }
 
-            // Format B: Multiple separate database rows
-            if (betsList.length >= 2) {
-                const b1 = betsList[0];
-                const b2 = betsList[1];
-                const b3 = betsList[2] || null;
-                return {
-                    l1: `${b1.sport || 'Sports'} | ${b1.matchup || ''} | Pick: ${b1.pick || ''} (${b1.odds > 0 ? '+' : ''}${b1.odds})`,
-                    l2: `${b2.sport || 'Sports'} | ${b2.matchup || ''} | Pick: ${b2.pick || ''} (${b2.odds > 0 ? '+' : ''}${b2.odds})`,
-                    l3: b3 ? `${b3.sport || 'Sports'} | ${b3.matchup || ''} | Pick: ${b3.pick || ''} (${b3.odds > 0 ? '+' : ''}${b3.odds})` : 'Candidate Leg 3 distilled out during odds filtering.'
-                };
-            }
-
-            // Format C: Single legacy row fallback
             return {
                 l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
-                l2: 'Single leg record detected. Run a fresh scan to populate dual legs.',
-                l3: 'Candidate Leg 3 distilled out during market evaluation.'
+                l2: 'Single-sport legacy format. Run a fresh cross-sport scan.',
+                l3: 'Candidate Leg 3 distilled out during odds filtering.'
             };
         }
 
@@ -388,7 +374,7 @@
                 } else {
                     container.innerHTML = `
                         <div class="parlay-card">
-                            <p>No bets returned from database query. Click generate below to run a scan.</p>
+                            <p>No bets returned from database query.</p>
                         </div>
                     `;
                 }
@@ -409,7 +395,7 @@
 
             btn.innerText = "Scanning Markets...";
             btn.disabled = true;
-            statusDiv.innerText = "Cloud action dispatched. Calling trigger...";
+            statusDiv.innerText = "Dispatching cloud workflow...";
 
             try {
                 const res = await fetch('/api/trigger', { method: 'POST' });
@@ -422,27 +408,30 @@
                     return;
                 }
 
+                statusDiv.innerText = "Runner active. Polling database for results...";
                 let elapsedSeconds = 0;
                 const initialId = currentLatestId;
 
                 const pollInterval = setInterval(async () => {
                     elapsedSeconds += 3;
-                    statusDiv.innerText = `Scanning markets in cloud... (${elapsedSeconds}s elapsed)`;
-
+                    
                     try {
                         const newBets = await fetchLatestRows();
                         if (newBets.length > 0 && newBets[0].id !== initialId) {
                             clearInterval(pollInterval);
-                            statusDiv.innerText = "New parlay locked! Updating terminal...";
-                            setTimeout(() => location.reload(true), 1000);
+                            statusDiv.innerText = "New cross-sport parlay locked! Refreshing...";
+                            setTimeout(() => location.reload(true), 800);
+                            return;
                         }
                     } catch (e) {
                         console.error("Polling error:", e);
                     }
 
-                    if (elapsedSeconds >= 90) {
+                    if (elapsedSeconds < 75) {
+                        statusDiv.innerText = `Analyzing sportsbooks... (${elapsedSeconds}s)`;
+                    } else {
                         clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan timed out (90s). Check GitHub Actions runner logs.";
+                        statusDiv.innerText = "Scan complete. No new cross-sport parlay matched criteria today.";
                         btn.innerText = "Generate Parlay";
                         btn.disabled = false;
                     }
