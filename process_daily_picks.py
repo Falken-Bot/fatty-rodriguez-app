@@ -46,7 +46,7 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=130):
             for market in bookmaker.get('markets', []):
                 for outcome in market.get('outcomes', []):
                     price = outcome.get('price')
-                    if price and (target_min <= price <= target_max):
+                    if price is not None and (target_min <= price <= target_max):
                         pick_label = outcome['name']
                         if 'point' in outcome:
                             pick_label += f" ({outcome['point']:+g})"
@@ -59,41 +59,54 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=130):
                         })
     return qualified
 
-def distill_cross_sport_parlay(candidates):
+def distill_parlay_package(candidates):
     if len(candidates) < 3:
-        print("Fewer than 3 total candidate picks available across markets.")
-        return []
+        print("Fewer than 3 candidate picks found across today's markets.")
+        return None
 
-    # Deduplicate matchups
+    # Deduplicate by matchup
     unique = []
-    seen = set()
+    seen_matchups = set()
     for c in candidates:
-        if c['matchup'] not in seen:
-            seen.add(c['matchup'])
+        if c['matchup'] not in seen_matchups:
+            seen_matchups.add(c['matchup'])
             unique.append(c)
 
-    # Sort candidates by proximity to standard value (-110 baseline)
+    if len(unique) < 3:
+        print("Fewer than 3 unique matchup picks found across markets.")
+        return None
+
+    # Sort by value proximity to standard -110 line
     unique.sort(key=lambda x: abs(x['odds'] + 110))
 
-    # Pull top 3 candidate legs
     top_three = unique[:3]
 
-    # Verify cross-sport requirement
+    # Enforce cross-sport requirement in top three
     sports_present = {c['sport'] for c in top_three}
     if len(sports_present) < 2:
-        # If top 3 are all one sport, force second sport insertion if available in remaining candidates
-        alt_sport_candidate = next((c for c in unique[3:] if c['sport'] not in sports_present), None)
-        if alt_sport_candidate:
-            top_three[2] = alt_sport_candidate
+        alt_candidate = next((c for c in unique[3:] if c['sport'] not in sports_present), None)
+        if alt_candidate:
+            top_three[2] = alt_candidate
         else:
-            print("Could not enforce cross-sport requirement: only one sport available today.")
-            return []
+            print("Could not satisfy cross-sport requirement: only one sport available today.")
+            return None
 
-    # Distill 3 candidate legs down to the Final 2
-    final_two = top_three[:2]
-    return final_two
+    # Identify active legs vs distilled out leg
+    active_legs = top_three[:2]
+    dropped_leg = top_three[2]
 
-def save_bets_direct_http(records):
+    reason = (
+        f"Leg 3 ({dropped_leg['sport']}: {dropped_leg['pick']} @ {dropped_leg['odds']}) "
+        f"was distilled out due to market value deviation relative to the top two cross-sport legs."
+    )
+
+    return {
+        "active_legs": active_legs,
+        "dropped_leg": dropped_leg,
+        "distill_reason": reason
+    }
+
+def save_parlay_direct_http(record):
     target_endpoint = f"{SUPABASE_URL}/rest/v1/bets"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -102,9 +115,9 @@ def save_bets_direct_http(records):
         "Prefer": "return=representation"
     }
     
-    res = requests.post(target_endpoint, json=records, headers=headers)
+    res = requests.post(target_endpoint, json=[record], headers=headers)
     if res.status_code in [200, 201]:
-        print(f"SUCCESS: Successfully saved {len(records)} cross-sport bets directly to Supabase!")
+        print("SUCCESS: Successfully saved distilled 2-leg $2 parlay package to Supabase!")
     else:
         print(f"Supabase HTTP Error ({res.status_code}): {res.text}")
 
@@ -117,20 +130,19 @@ if __name__ == "__main__":
         raw = fetch_odds(sport)
         all_candidates.extend(filter_fatty_picks(raw, today_str))
 
-    best_two = distill_cross_sport_parlay(all_candidates)
+    parlay_pkg = distill_parlay_package(all_candidates)
     
-    if len(best_two) == 2:
-        records = []
-        for pick in best_two:
-            records.append({
-                "event_date": today_str,
-                "sport": pick['sport'],
-                "matchup": pick['matchup'],
-                "pick": pick['pick'],
-                "odds": pick['odds'],
-                "wager_amount": 2.00,
-                "status": 'pending'
-            })
-        save_bets_direct_http(records)
+    if parlay_pkg:
+        # Save as a single combined record storing both active legs and the distilled leg
+        record = {
+            "event_date": today_str,
+            "sport": "CROSS-SPORT PARLAY",
+            "matchup": f"PARLAY: {parlay_pkg['active_legs'][0]['matchup']} | {parlay_pkg['active_legs'][1]['matchup']}",
+            "pick": f"LEG 1: {parlay_pkg['active_legs'][0]['sport']} - {parlay_pkg['active_legs'][0]['pick']} ({parlay_pkg['active_legs'][0]['odds']}) || LEG 2: {parlay_pkg['active_legs'][1]['sport']} - {parlay_pkg['active_legs'][1]['pick']} ({parlay_pkg['active_legs'][1]['odds']}) || DROPPED: {parlay_pkg['dropped_leg']['sport']} - {parlay_pkg['dropped_leg']['pick']} ({parlay_pkg['dropped_leg']['odds']})",
+            "odds": parlay_pkg['active_legs'][0]['odds'],
+            "wager_amount": 2.00,
+            "status": "pending"
+        }
+        save_parlay_direct_http(record)
     else:
-        print("Could not complete cross-sport distillation for today.")
+        print("Could not build a qualifying cross-sport parlay today.")
