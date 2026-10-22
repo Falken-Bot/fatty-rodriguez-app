@@ -276,6 +276,8 @@
         const SUPABASE_URL = RAW_URL.replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '');
         const SUPABASE_KEY = "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp";
 
+        let currentLatestId = null;
+
         function getTodayStrET() {
             const now = new Date();
             const formatter = new Intl.DateTimeFormat('en-US', {
@@ -322,39 +324,32 @@
             };
         }
 
+        async function fetchLatestRow() {
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1`;
+            let response = await fetch(url, {
+                cache: 'no-store',
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`Supabase Error ${response.status}: ${await response.text()}`);
+            }
+            let bets = await response.json();
+            return (Array.isArray(bets) && bets.length > 0) ? bets[0] : null;
+        }
+
         async function loadTodayBets() {
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
-
-            // Clean PostgREST query parameters (no unrecognized params)
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1`;
-            
             const container = document.getElementById('parlay-container');
 
             try {
-                let response = await fetch(url, {
-                    cache: 'no-store', // Prevents browser caching cleanly
-                    headers: {
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": `Bearer ${SUPABASE_KEY}`
-                    }
-                });
-
-                if (!response.ok) {
-                    const errText = await response.text();
-                    container.innerHTML = `
-                        <div class="parlay-card" style="border-left-color: #FF4D4D;">
-                            <h3 style="color: #FF4D4D;">SUPABASE FETCH ERROR (${response.status})</h3>
-                            <p>${errText}</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                let bets = await response.json();
-                
-                if (Array.isArray(bets) && bets.length > 0) {
-                    const parsed = parseBets(bets);
+                const latest = await fetchLatestRow();
+                if (latest) {
+                    currentLatestId = latest.id;
+                    const parsed = parseBets([latest]);
 
                     container.innerHTML = `
                         <div class="parlay-card">
@@ -386,7 +381,7 @@
                 } else {
                     container.innerHTML = `
                         <div class="parlay-card">
-                            <p>No bets returned from database query.</p>
+                            <p>No bets returned from database query. Click generate below to run a scan.</p>
                         </div>
                     `;
                 }
@@ -394,7 +389,7 @@
                 console.error("Error loading bets:", err);
                 container.innerHTML = `
                     <div class="parlay-card" style="border-left-color: #FF4D4D;">
-                        <h3 style="color: #FF4D4D;">JAVASCRIPT EXCEPTION</h3>
+                        <h3 style="color: #FF4D4D;">DATABASE ERROR</h3>
                         <p>${err.message}</p>
                     </div>
                 `;
@@ -407,28 +402,44 @@
 
             btn.innerText = "Scanning Markets...";
             btn.disabled = true;
-            statusDiv.innerText = "Triggering cloud scan across markets...";
+            statusDiv.innerText = "Cloud action dispatched. Waiting for runner...";
 
             try {
                 const res = await fetch('/api/trigger', { method: 'POST' });
-                if (res.ok) {
-                    let secondsLeft = 10;
-                    statusDiv.innerText = `Scan triggered successfully. Refreshing card in ${secondsLeft}s...`;
-                    
-                    const timer = setInterval(() => {
-                        secondsLeft--;
-                        if (secondsLeft > 0) {
-                            statusDiv.innerText = `Scan triggered successfully. Refreshing card in ${secondsLeft}s...`;
-                        } else {
-                            clearInterval(timer);
-                            location.reload(true);
-                        }
-                    }, 1000);
-                } else {
+                if (!res.ok) {
                     statusDiv.innerText = "Trigger failed. Check serverless function logs.";
                     btn.innerText = "Generate Parlay";
                     btn.disabled = false;
+                    return;
                 }
+
+                // Intelligent Polling Logic
+                let elapsedSeconds = 0;
+                const initialId = currentLatestId;
+
+                const pollInterval = setInterval(async () => {
+                    elapsedSeconds += 3;
+                    statusDiv.innerText = `Scanning markets in cloud... (${elapsedSeconds}s elapsed)`;
+
+                    try {
+                        const newLatest = await fetchLatestRow();
+                        if (newLatest && newLatest.id !== initialId) {
+                            clearInterval(pollInterval);
+                            statusDiv.innerText = "New parlay locked! Updating terminal...";
+                            setTimeout(() => location.reload(true), 1000);
+                        }
+                    } catch (e) {
+                        console.error("Polling error:", e);
+                    }
+
+                    if (elapsedSeconds >= 60) {
+                        clearInterval(pollInterval);
+                        statusDiv.innerText = "Scan timed out (60s). Check GitHub Actions runner status.";
+                        btn.innerText = "Generate Parlay";
+                        btn.disabled = false;
+                    }
+                }, 3000);
+
             } catch (e) {
                 console.error(e);
                 statusDiv.innerText = "Network error calling trigger endpoint.";
