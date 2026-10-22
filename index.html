@@ -11,9 +11,10 @@
             --gold: #FFD700;
             --gold-dark: #FFA500;
             --text-main: #FFFFFF;
-            --text-muted: #A0A0A5;
+            --text-muted: #9E9EA6;
             --border-color: #2A2A30;
             --red-cut: #FF4D4D;
+            --badge-bg: #1F1F26;
         }
 
         body {
@@ -113,72 +114,111 @@
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             border-left: 5px solid var(--gold);
-            padding: 25px;
+            padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
         }
 
         .parlay-card h3 {
-            margin: 0 0 18px 0;
-            font-size: 18px;
+            margin: 0 0 22px 0;
+            font-size: 19px;
             color: var(--gold);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             display: flex;
             justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
         }
 
+        /* High-Impact Pick Card Styling */
         .leg-box {
-            background: #1A1A20;
+            background: var(--badge-bg);
             border: 1px solid var(--border-color);
-            padding: 14px 18px;
-            border-radius: 6px;
-            margin-bottom: 12px;
+            padding: 18px 22px;
+            border-radius: 8px;
+            margin-bottom: 15px;
         }
 
         .leg-box.active-leg {
-            border-left: 4px solid var(--gold);
+            border-left: 5px solid var(--gold);
+            box-shadow: inset 0 0 15px rgba(255, 215, 0, 0.03);
         }
 
         .leg-box.cut-leg {
-            border-left: 4px solid var(--red-cut);
-            opacity: 0.8;
+            border-left: 5px solid var(--red-cut);
+            opacity: 0.85;
+            background: #181416;
+        }
+
+        .leg-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
         }
 
         .leg-label {
             font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 1px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
-            margin-bottom: 6px;
         }
 
         .leg-label.active { color: var(--gold); }
         .leg-label.cut { color: var(--red-cut); }
 
-        .leg-details {
-            font-size: 15px;
+        .sport-badge {
+            background: rgba(255, 215, 0, 0.1);
+            color: var(--gold);
+            font-size: 10px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            text-transform: uppercase;
+        }
+
+        .sport-badge.cut-sport {
+            background: rgba(255, 77, 77, 0.1);
+            color: var(--red-cut);
+            border: 1px solid rgba(255, 77, 77, 0.3);
+        }
+
+        .matchup-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .selection-display {
+            font-size: 18px;
+            font-weight: 900;
             color: var(--text-main);
-            margin: 0;
-            line-height: 1.4;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
         .distill-reason {
             font-size: 13px;
             color: var(--text-muted);
-            margin-top: 15px;
-            padding-top: 12px;
+            margin-top: 20px;
+            padding-top: 15px;
             border-top: 1px solid var(--border-color);
             font-style: italic;
             line-height: 1.4;
         }
 
-        /* History Ledger Styles */
+        /* History Ledger Styling */
         .history-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             border-left: 5px solid var(--text-muted);
-            padding: 18px 20px;
+            padding: 20px;
             border-radius: 8px;
             margin-bottom: 15px;
         }
@@ -186,28 +226,29 @@
         .history-header {
             display: flex;
             justify-content: space-between;
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 12px;
+            font-weight: 800;
             color: var(--gold);
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 8px;
+            letter-spacing: 1px;
         }
 
-        .history-legs {
-            font-size: 13px;
-            color: var(--text-muted);
-            line-height: 1.5;
-            white-space: pre-wrap;
+        .history-summary {
+            font-size: 14px;
+            color: var(--text-main);
+            font-weight: 700;
         }
 
         .action-panel {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            padding: 25px;
+            padding: 30px;
             border-radius: 8px;
             text-align: center;
             margin-bottom: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
         }
 
         .action-panel p {
@@ -220,15 +261,15 @@
             background: linear-gradient(135deg, var(--gold), var(--gold-dark));
             color: #000;
             border: none;
-            padding: 14px 30px;
+            padding: 16px 36px;
             font-weight: 900;
-            font-size: 14px;
-            letter-spacing: 1.5px;
+            font-size: 15px;
+            letter-spacing: 2px;
             text-transform: uppercase;
             border-radius: 4px;
             cursor: pointer;
             transition: opacity 0.2s, transform 0.1s;
-            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.35);
         }
 
         .generate-btn:hover {
@@ -258,10 +299,11 @@
 
         footer {
             text-align: center;
-            padding: 20px;
+            padding: 25px;
             color: var(--text-muted);
             font-size: 12px;
             border-top: 1px solid var(--border-color);
+            letter-spacing: 1px;
         }
     </style>
 </head>
@@ -292,7 +334,7 @@
 
         <!-- Manual Control Panel -->
         <div class="action-panel">
-            <p>Manual control panel for triggering odds scan and parlay selection.</p>
+            <p>Manual executive control panel for triggering live sportsbook scans and cross-sport distillation.</p>
             <button id="generate-btn" class="generate-btn" onclick="triggerManualScan()">Generate Parlay</button>
             <div id="scan-status" class="scan-status-msg"></div>
         </div>
@@ -334,19 +376,48 @@
             return `${y}-${m}-${d}`;
         }
 
+        // Intelligent parser to break raw string into formatted components
+        function renderPickBox(rawLegStr, isCut = false) {
+            // Expected format: "NHL | Pittsburgh Penguins vs Florida Panthers | Pick: Florida Panthers (-105)"
+            let cleanStr = rawLegStr.replace(/^(LEG1?:|LEG2?:|DROPPED:)/, '').trim();
+            
+            if (!cleanStr || cleanStr.includes('Single-sport') || cleanStr.includes('No active')) {
+                return `
+                    <div class="leg-header-row">
+                        <span class="leg-label ${isCut ? 'cut' : 'active'}">${isCut ? 'Distilled Out (Candidate Leg 3)' : 'Active Leg'}</span>
+                    </div>
+                    <div class="selection-display">${cleanStr}</div>
+                `;
+            }
+
+            let parts = cleanStr.split('|').map(p => p.trim());
+            let sport = parts[0] || 'SPORTS';
+            let matchup = parts[1] || 'Matchup TBD';
+            let selection = parts.slice(2).join(' | ') || cleanStr;
+
+            return `
+                <div class="leg-header-row">
+                    <span class="leg-label ${isCut ? 'cut' : 'active'}">${isCut ? 'Distilled Out (Candidate Leg 3)' : 'Active Parlay Leg'}</span>
+                    <span class="sport-badge ${isCut ? 'cut-sport' : ''}">${sport}</span>
+                </div>
+                <div class="matchup-title">${matchup}</div>
+                <div class="selection-display">${selection}</div>
+            `;
+        }
+
         function parsePickString(rawPick) {
             if (rawPick.includes('||')) {
                 const parts = rawPick.split('||');
                 return {
-                    l1: parts[0] ? parts[0].replace(/LEG1?:/, '').trim() : 'Active Leg 1',
-                    l2: parts[1] ? parts[1].replace(/LEG2?:/, '').trim() : 'Active Leg 2',
-                    l3: parts[2] ? parts[2].replace(/DROPPED:/, '').trim() : 'Leg 3 (Distilled Out)'
+                    l1: parts[0] ? parts[0].trim() : '',
+                    l2: parts[1] ? parts[1].trim() : '',
+                    l3: parts[2] ? parts[2].trim() : ''
                 };
             }
             return {
                 l1: rawPick,
-                l2: 'Single-sport legacy format.',
-                l3: 'N/A'
+                l2: '',
+                l3: ''
             };
         }
 
@@ -377,37 +448,36 @@
                 if (bets.length > 0) {
                     currentLatestId = bets[0].id;
                     
-                    // 1. Render Active Top Parlay (Newest)
+                    // 1. Render Active Top Parlay with high-impact layout
                     const latestParsed = parsePickString(bets[0].pick);
                     parlayContainer.innerHTML = `
                         <div class="parlay-card">
                             <h3>
-                                <span>FATTY'S 2-LEG PARLAY</span>
+                                <span>FATTY'S 2-LEG CROSS-SPORT PARLAY</span>
                                 <span>$${Number(bets[0].wager_amount || 2).toFixed(2)} BASE WAGER</span>
                             </h3>
                             
                             <div class="leg-box active-leg">
-                                <div class="leg-label active">PARLAY LEG 1 (ACTIVE)</div>
-                                <div class="leg-details">${latestParsed.l1}</div>
+                                ${renderPickBox(latestParsed.l1, false)}
                             </div>
 
                             <div class="leg-box active-leg">
-                                <div class="leg-label active">PARLAY LEG 2 (ACTIVE)</div>
-                                <div class="leg-details">${latestParsed.l2}</div>
+                                ${renderPickBox(latestParsed.l2, false)}
                             </div>
 
                             <div class="leg-box cut-leg">
-                                <div class="leg-label cut">DISTILLED OUT (CANDIDATE LEG 3)</div>
-                                <div class="leg-details">${latestParsed.l3}</div>
+                                ${renderPickBox(latestParsed.l3, true)}
                             </div>
 
                             <div class="distill-reason">
-                                <strong>Date:</strong> ${bets[0].event_date} | <strong>Status:</strong> ${bets[0].status.toUpperCase()}
+                                <strong>Date Locked:</strong> ${bets[0].event_date} &nbsp;|&nbsp; 
+                                <strong>System Status:</strong> <span style="color: var(--gold);">${bets[0].status.toUpperCase()}</span> &nbsp;|&nbsp; 
+                                <strong>Rationale:</strong> Candidate leg 3 was distilled out to lock in the highest-probability 2-leg cross-sport baseline.
                             </div>
                         </div>
                     `;
 
-                    // 2. Render Historical Ledger (Older records)
+                    // 2. Render Historical Ledger
                     if (bets.length > 1) {
                         let historyHTML = '';
                         for (let i = 1; i < bets.length; i++) {
@@ -415,10 +485,10 @@
                             historyHTML += `
                                 <div class="history-card">
                                     <div class="history-header">
-                                        <span>DATE: ${b.event_date} (ID: ${b.id})</span>
-                                        <span>STATUS: ${b.status.toUpperCase()} | WAGER: $${Number(b.wager_amount || 2).toFixed(2)}</span>
+                                        <span>DATE: ${b.event_date} &nbsp;|&nbsp; RECORD ID #${b.id}</span>
+                                        <span>STATUS: ${b.status.toUpperCase()} &nbsp;|&nbsp; WAGER: $${Number(b.wager_amount || 2).toFixed(2)}</span>
                                     </div>
-                                    <div class="history-legs">${b.pick}</div>
+                                    <div class="history-summary">${b.pick}</div>
                                 </div>
                             `;
                         }
@@ -466,43 +536,4 @@
                 }
 
                 statusDiv.innerText = "Cloud runner active. Polling Supabase for new parlay...";
-                let elapsedSeconds = 0;
-                const initialId = currentLatestId;
-
-                const pollInterval = setInterval(async () => {
-                    elapsedSeconds += 3;
-                    
-                    try {
-                        const newBets = await fetchAllBets();
-                        if (newBets.length > 0 && newBets[0].id !== initialId) {
-                            clearInterval(pollInterval);
-                            statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
-                            setTimeout(() => location.reload(true), 600);
-                            return;
-                        }
-                    } catch (e) {
-                        console.error("Polling error:", e);
-                    }
-
-                    if (elapsedSeconds < 120) {
-                        statusDiv.innerText = `Scanning sportsbooks... (${elapsedSeconds}s elapsed)`;
-                    } else {
-                        clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan processing complete.";
-                        btn.innerText = "Generate Parlay";
-                        btn.disabled = false;
-                    }
-                }, 3000);
-
-            } catch (e) {
-                console.error(e);
-                statusDiv.innerText = "Network error calling trigger endpoint.";
-                btn.innerText = "Generate Parlay";
-                btn.disabled = false;
-            }
-        }
-
-        window.onload = loadTerminalData;
-    </script>
-</body>
-</html>
+                let
