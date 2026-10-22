@@ -75,6 +75,7 @@ def build_distilled_cross_sport_parlay(candidates):
         print("No qualified candidates found today.")
         return None
 
+    # Group candidates by sport, ensuring unique matchups per sport
     by_sport = {}
     for c in candidates:
         sport = c['sport']
@@ -83,19 +84,27 @@ def build_distilled_cross_sport_parlay(candidates):
         if not any(existing['matchup'] == c['matchup'] for existing in by_sport[sport]):
             by_sport[sport].append(c)
 
-    for sport in by_sport:
-        by_sport[sport].sort(key=lambda x: abs(x['odds'] + 110))
-
+    # Filter out sports with zero qualified picks
+    by_sport = {s: items for s, items in by_sport.items() if items}
     available_sports = list(by_sport.keys())
-    print(f"Active sports available today with valid odds (ET local date): {available_sports}")
+    print(f"Active sports with valid odds today (-130 to +130): {available_sports}")
 
+    # STRICT RULE: Must have at least 2 distinct sports to build a cross-sport parlay
     if len(available_sports) < 2:
-        print(f"CRITICAL ERROR: Found only 1 active sport today ({available_sports}). Need at least 2 distinct sports.")
+        print(f"CRITICAL ERROR: Cross-sport diversity violation. Found qualifying odds in only {len(available_sports)} sport(s): {available_sports}. Aborting parlay generation.")
         return None
 
-    leg1 = by_sport[available_sports[0]][0]
-    leg2 = by_sport[available_sports[1]][0]
+    # Select Leg 1 from Sport 1, Leg 2 from Sport 2
+    sport1, sport2 = available_sports[0], available_sports[1]
+    leg1 = by_sport[sport1][0]
+    leg2 = by_sport[sport2][0]
 
+    # Double check that Leg 1 and Leg 2 are strictly different sports
+    if leg1['sport'] == leg2['sport']:
+        print("CRITICAL ERROR: Leg 1 and Leg 2 belong to the same sport. Aborting.")
+        return None
+
+    # Select Leg 3 (Distilled Out) from a 3rd sport if available, otherwise from remaining distinct matchups
     leg3 = None
     if len(available_sports) >= 3 and len(by_sport[available_sports[2]]) > 0:
         leg3 = by_sport[available_sports[2]][0]
@@ -108,8 +117,8 @@ def build_distilled_cross_sport_parlay(candidates):
             if leg3:
                 break
 
-    if not leg3:
-        print("Could not find a distinct 3rd candidate leg to distill out.")
+    if not leg3 or leg3['matchup'] == leg1['matchup'] or leg3['matchup'] == leg2['matchup']:
+        print("Could not find a distinct 3rd candidate leg with a unique matchup.")
         return None
 
     return {
@@ -129,7 +138,7 @@ def save_parlay_direct_http(record):
     
     res = requests.post(target_endpoint, json=[record], headers=headers, timeout=10)
     if res.status_code in [200, 201]:
-        print("SUCCESS: Saved 2-leg cross-sport parlay package directly to Supabase!")
+        print("SUCCESS: Saved validated 2-leg cross-sport parlay package directly to Supabase!")
     else:
         print(f"Supabase HTTP Error ({res.status_code}): {res.text}")
         sys.exit(1)
