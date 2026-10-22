@@ -210,8 +210,13 @@
     </footer>
 
     <script>
-        // REPLACE THESE WITH YOUR ACTUAL SUPABASE CREDENTIALS
-        const SUPABASE_URL = "https://ejnwsxbpuumcpyxnmsaz.supabase.co/rest/v1";
+        // CLEAN BASE URL - NO SLASHES OR SUBPATHS
+        let RAW_URL = "https://ejnwsxbpuumcpyxnmsaz.supabase.co";
+        
+        // Strip trailing slashes and redundant subpaths if accidentally pasted
+        const SUPABASE_URL = RAW_URL.replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '');
+        
+        // REPLACE WITH YOUR ACTUAL SUPABASE ANON KEY
         const SUPABASE_KEY = "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp";
 
         function getTodayStrET() {
@@ -233,7 +238,7 @@
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
 
-            // Primary query: check exact date match
+            // Corrected endpoint path construction
             let url = `${SUPABASE_URL}/rest/v1/bets?event_date=like.${todayStr}*&select=*`;
             
             try {
@@ -245,7 +250,7 @@
                 });
                 let bets = await response.json();
 
-                // Fallback query: if no exact date match, pull the latest 2 inserted rows
+                // Fallback query if date string query returns empty
                 if (!Array.isArray(bets) || bets.length === 0) {
                     const fallbackUrl = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=2`;
                     response = await fetch(fallbackUrl, {
