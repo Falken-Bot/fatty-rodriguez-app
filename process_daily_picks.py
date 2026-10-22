@@ -59,50 +59,59 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=130):
                         })
     return qualified
 
-def distill_parlay_package(candidates):
-    if len(candidates) < 3:
-        print("Fewer than 3 candidate picks found across today's markets.")
+def build_distilled_cross_sport_parlay(candidates):
+    if not candidates:
+        print("No qualified candidates found today.")
         return None
 
-    # Deduplicate by matchup
-    unique = []
-    seen_matchups = set()
+    # Step 1: Group candidates by Sport and deduplicate by matchup
+    by_sport = {}
     for c in candidates:
-        if c['matchup'] not in seen_matchups:
-            seen_matchups.add(c['matchup'])
-            unique.append(c)
+        sport = c['sport']
+        if sport not in by_sport:
+            by_sport[sport] = []
+        
+        # Avoid duplicate matchups within the same sport
+        if not any(existing['matchup'] == c['matchup'] for existing in by_sport[sport]):
+            by_sport[sport].append(c)
 
-    if len(unique) < 3:
-        print("Fewer than 3 unique matchup picks found across markets.")
+    # Sort each sport's candidates by proximity to -110 even money baseline
+    for sport in by_sport:
+        by_sport[sport].sort(key=lambda x: abs(x['odds'] + 110))
+
+    available_sports = list(by_sport.keys())
+    if len(available_sports) < 2:
+        print(f"FAILED: Need at least 2 distinct sports available today, but only found {len(available_sports)} ({available_sports}).")
         return None
 
-    # Sort by value proximity to standard -110 line
-    unique.sort(key=lambda x: abs(x['odds'] + 110))
+    # Step 2: Pick best candidate from Sport A and best candidate from Sport B
+    leg1 = by_sport[available_sports[0]][0]
+    leg2 = by_sport[available_sports[1]][0]
 
-    top_three = unique[:3]
+    # Step 3: Find a distinct candidate for the Distilled Leg (Leg 3)
+    leg3 = None
+    
+    # Try a 3rd sport first if available
+    if len(available_sports) >= 3 and len(by_sport[available_sports[2]]) > 0:
+        leg3 = by_sport[available_sports[2]][0]
+    else:
+        # Otherwise, take the next best distinct matchup from Sport A or Sport B
+        for s in available_sports:
+            for item in by_sport[s]:
+                if item['matchup'] != leg1['matchup'] and item['matchup'] != leg2['matchup']:
+                    leg3 = item
+                    break
+            if leg3:
+                break
 
-    # Enforce cross-sport requirement
-    sports_present = {c['sport'] for c in top_three}
-    if len(sports_present) < 2:
-        alt_candidate = next((c for c in unique[3:] if c['sport'] not in sports_present), None)
-        if alt_candidate:
-            top_three[2] = alt_candidate
-        else:
-            print("Could not satisfy cross-sport requirement: only one sport available today.")
-            return None
-
-    active_legs = top_three[:2]
-    dropped_leg = top_three[2]
-
-    reason = (
-        f"Leg 3 ({dropped_leg['sport']}: {dropped_leg['pick']} @ {dropped_leg['odds']}) "
-        f"was distilled out due to market value deviation relative to the top two cross-sport legs."
-    )
+    if not leg3:
+        print("Could not find a distinct 3rd candidate leg to distill out.")
+        return None
 
     return {
-        "active_legs": active_legs,
-        "dropped_leg": dropped_leg,
-        "distill_reason": reason
+        "leg1": leg1,
+        "leg2": leg2,
+        "leg3": leg3
     }
 
 def save_parlay_direct_http(record):
@@ -129,12 +138,12 @@ if __name__ == "__main__":
         raw = fetch_odds(sport)
         all_candidates.extend(filter_fatty_picks(raw, today_str))
 
-    parlay_pkg = distill_parlay_package(all_candidates)
+    parlay_pkg = build_distilled_cross_sport_parlay(all_candidates)
     
     if parlay_pkg:
-        l1 = parlay_pkg['active_legs'][0]
-        l2 = parlay_pkg['active_legs'][1]
-        l3 = parlay_pkg['dropped_leg']
+        l1 = parlay_pkg['leg1']
+        l2 = parlay_pkg['leg2']
+        l3 = parlay_pkg['leg3']
 
         fmt_l1 = f"{l1['sport']} | {l1['matchup']} | Pick: {l1['pick']} ({'+' if l1['odds']>0 else ''}{l1['odds']})"
         fmt_l2 = f"{l2['sport']} | {l2['matchup']} | Pick: {l2['pick']} ({'+' if l2['odds']>0 else ''}{l2['odds']})"
