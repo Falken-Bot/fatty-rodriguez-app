@@ -391,12 +391,14 @@
 
             btn.innerText = "Scanning Markets...";
             btn.disabled = true;
-            statusDiv.innerText = "Cloud action dispatched. Waiting for runner...";
+            statusDiv.innerText = "Cloud action dispatched. Calling trigger...";
 
             try {
                 const res = await fetch('/api/trigger', { method: 'POST' });
+                const data = await res.json();
+
                 if (!res.ok) {
-                    statusDiv.innerText = "Trigger failed. Check serverless function logs.";
+                    statusDiv.innerText = `Error: ${data.error || 'Trigger failed'}`;
                     btn.innerText = "Generate Parlay";
                     btn.disabled = false;
                     return;
