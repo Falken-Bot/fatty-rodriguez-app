@@ -306,21 +306,10 @@
                 };
             }
 
-            if (betsList.length >= 2) {
-                const b1 = betsList[0];
-                const b2 = betsList[1];
-                const b3 = betsList[2] || null;
-                return {
-                    l1: `${b1.sport || 'Sports'} | ${b1.matchup || ''} | Pick: ${b1.pick || ''} (${b1.odds > 0 ? '+' : ''}${b1.odds})`,
-                    l2: `${b2.sport || 'Sports'} | ${b2.matchup || ''} | Pick: ${b2.pick || ''} (${b2.odds > 0 ? '+' : ''}${b2.odds})`,
-                    l3: b3 ? `${b3.sport || 'Sports'} | ${b3.matchup || ''} | Pick: ${b3.pick || ''} (${b3.odds > 0 ? '+' : ''}${b3.odds})` : 'Candidate Leg 3 distilled out during odds filtering.'
-                };
-            }
-
             return {
                 l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
-                l2: 'Awaiting next automated cross-sport scan...',
-                l3: 'Candidate Leg 3 distilled out during market evaluation.'
+                l2: 'Run a new scan above to generate a fresh cross-sport parlay package.',
+                l3: 'Candidate Leg 3 distilled out during odds filtering.'
             };
         }
 
@@ -413,7 +402,6 @@
                     return;
                 }
 
-                // Intelligent Polling Logic
                 let elapsedSeconds = 0;
                 const initialId = currentLatestId;
 
@@ -432,9 +420,9 @@
                         console.error("Polling error:", e);
                     }
 
-                    if (elapsedSeconds >= 60) {
+                    if (elapsedSeconds >= 90) {
                         clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan timed out (60s). Check GitHub Actions runner status.";
+                        statusDiv.innerText = "Scan timed out (90s). Check GitHub Actions runner logs.";
                         btn.innerText = "Generate Parlay";
                         btn.disabled = false;
                     }
