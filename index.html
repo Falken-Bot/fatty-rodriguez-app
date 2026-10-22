@@ -203,7 +203,6 @@
             margin-bottom: 12px;
         }
 
-        /* Analytical Rationale Write-up Box */
         .rationale-box {
             background: var(--logic-bg);
             border: 1px solid var(--border-color);
@@ -388,8 +387,8 @@
             return `${y}-${m}-${d}`;
         }
 
-        // Calculate implied probability from American odds
         function calculateImpliedProb(oddsStr) {
+            if (!oddsStr) return null;
             const match = oddsStr.match(/([+-]?\d+)/);
             if (!match) return null;
             const odds = parseInt(match[1], 10);
@@ -400,32 +399,31 @@
             }
         }
 
-        // Generate dynamic analytical write-up & logic per pick
         function generateRationale(sport, selection, oddsStr, isCut) {
             const prob = calculateImpliedProb(oddsStr);
             const probText = prob ? prob.toFixed(1) + '%' : 'Market Baseline';
-            const isDog = oddsStr.includes('+');
+            const isDog = oddsStr && oddsStr.includes('+');
 
             if (isCut) {
                 return `<strong>Distillation Logic:</strong> Evaluated in the primary candidate pool. Distilled out during the cross-sport correlation sweep to isolate the highest statistical confidence 2-leg pairing.`;
             }
 
             if (isDog) {
-                return `<strong>Quantitative Rationale:</strong> This underdog selection is priced at <strong>${oddsStr}</strong> (~${probText} implied probability). Statistical modeling identifies positive baseline value within the strict -130 to +130 efficiency corridor, exploiting market mispricing on expected goal/point differential.`;
+                return `<strong>Quantitative Rationale:</strong> This selection is priced at <strong>${oddsStr || 'N/A'}</strong> (~${probText} implied probability). Statistical modeling identifies positive baseline value within the strict -130 to +130 efficiency corridor.`;
             } else {
-                return `<strong>Quantitative Rationale:</strong> Positioned at <strong>${oddsStr}</strong> (~${probText} implied probability). Evaluated as a high-efficiency anchor within the target pricing band, displaying strong baseline metric support and zero intra-sport correlation conflict.`;
+                return `<strong>Quantitative Rationale:</strong> Positioned at <strong>${oddsStr || 'N/A'}</strong> (~${probText} implied probability). Evaluated as a high-efficiency anchor within the target pricing band, displaying strong baseline metric support.`;
             }
         }
 
         function renderPickBox(rawLegStr, isCut = false) {
-            let cleanStr = rawLegStr.replace(/^(LEG1?:|LEG2?:|DROPPED:)/, '').trim();
+            let cleanStr = (rawLegStr || '').replace(/^(LEG1?:|LEG2?:|DROPPED:)/, '').trim();
             
             if (!cleanStr || cleanStr.includes('Single-sport') || cleanStr.includes('No active')) {
                 return `
                     <div class="leg-header-row">
                         <span class="leg-label ${isCut ? 'cut' : 'active'}">${isCut ? 'Distilled Out (Candidate Leg 3)' : 'Active Leg'}</span>
                     </div>
-                    <div class="selection-display">${cleanStr}</div>
+                    <div class="selection-display">${cleanStr || 'Pending data...'}</div>
                 `;
             }
 
@@ -434,7 +432,6 @@
             let matchup = parts[1] || 'Matchup TBD';
             let selection = parts.slice(2).join(' | ') || cleanStr;
 
-            // Extract odds for rationale calculation
             let oddsMatch = selection.match(/\(([+-]?\d+)\)/);
             let oddsStr = oddsMatch ? oddsMatch[1] : '';
 
@@ -454,6 +451,7 @@
         }
 
         function parsePickString(rawPick) {
+            if (!rawPick) return { l1: '', l2: '', l3: '' };
             if (rawPick.includes('||')) {
                 const parts = rawPick.split('||');
                 return {
@@ -495,13 +493,18 @@
                 const bets = await fetchAllBets();
                 if (bets.length > 0) {
                     currentLatestId = bets[0].id;
+                    const latest = bets[0];
                     
-                    const latestParsed = parsePickString(bets[0].pick);
+                    const latestParsed = parsePickString(latest.pick);
+                    const wagerAmount = Number(latest.wager_amount || 2).toFixed(2);
+                    const eventDate = latest.event_date || 'Today';
+                    const status = (latest.status || 'pending').toUpperCase();
+
                     parlayContainer.innerHTML = `
                         <div class="parlay-card">
                             <h3>
                                 <span>FATTY'S 2-LEG CROSS-SPORT PARLAY</span>
-                                <span>$${Number(bets[0].wager_amount || 2).toFixed(2)} BASE WAGER</span>
+                                <span>$${wagerAmount} BASE WAGER</span>
                             </h3>
                             
                             <div class="leg-box active-leg">
@@ -517,8 +520,8 @@
                             </div>
 
                             <div class="distill-reason">
-                                <strong>Date Locked:</strong> ${bets[0].event_date} &nbsp;|&nbsp; 
-                                <strong>System Status:</strong> <span style="color: var(--gold);">${bets[0].status.toUpperCase()}</span> &nbsp;|&nbsp; 
+                                <strong>Date Locked:</strong> ${eventDate} &nbsp;|&nbsp; 
+                                <strong>System Status:</strong> <span style="color: var(--gold);">${status}</span> &nbsp;|&nbsp; 
                                 <strong>Execution Profile:</strong> Strict cross-sport decoupling enforced across active market lines.
                             </div>
                         </div>
@@ -528,13 +531,19 @@
                         let historyHTML = '';
                         for (let i = 1; i < bets.length; i++) {
                             const b = bets[i];
+                            const hDate = b.event_date || 'Past';
+                            const hId = b.id || i;
+                            const hStatus = (b.status || 'pending').toUpperCase();
+                            const hWager = Number(b.wager_amount || 2).toFixed(2);
+                            const hPick = b.pick || 'No pick data';
+
                             historyHTML += `
                                 <div class="history-card">
                                     <div class="history-header">
-                                        <span>DATE: ${b.event_date} &nbsp;|&nbsp; RECORD ID #${b.id}</span>
-                                        <span>STATUS: ${b.status.toUpperCase()} &nbsp;|&nbsp; WAGER: $${Number(b.wager_amount || 2).toFixed(2)}</span>
+                                        <span>DATE: ${hDate} &nbsp;|&nbsp; RECORD ID #${hId}</span>
+                                        <span>STATUS: ${hStatus} &nbsp;|&nbsp; WAGER: $${hWager}</span>
                                     </div>
-                                    <div class="history-summary">${b.pick}</div>
+                                    <div class="history-summary">${hPick}</div>
                                 </div>
                             `;
                         }
