@@ -3,14 +3,10 @@ import sys
 import requests
 from datetime import datetime
 
-# --- 1. SAFE IMPORTS & CREDENTIAL STRIPPING ---
+# --- 1. CREDENTIAL STRIPPING ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "").strip()
-
-print(f"DEBUG: SUPABASE_URL set: {bool(SUPABASE_URL)}")
-print(f"DEBUG: SUPABASE_KEY set: {bool(SUPABASE_KEY)}")
-print(f"DEBUG: ODDS_API_KEY set: {bool(ODDS_API_KEY)}")
 
 try:
     from supabase import create_client, Client
@@ -19,23 +15,20 @@ except Exception as e:
     print(f"CRITICAL ERROR initializing Supabase client: {e}")
     sys.exit(1)
 
+# Corrected valid sport keys for The Odds API
 SPORTS_LIST = [
     "baseball_mlb", 
     "basketball_nba", 
-    "hockey_nhl", 
-    "americanfootball_nfl", 
-    "tennis_atp", 
-    "golf_pga_championship"
+    "icehockey_nhl", 
+    "americanfootball_nfl"
 ]
 
 def get_today_str_et():
-    """Returns today's date formatted as YYYY-MM-DD in US Eastern Time."""
     try:
         import zoneinfo
         et_tz = zoneinfo.ZoneInfo("America/New_York")
         return datetime.now(et_tz).strftime("%Y-%m-%d")
     except Exception:
-        # Fallback to standard UTC date if zoneinfo is unavailable
         return datetime.utcnow().strftime("%Y-%m-%d")
 
 def check_existing_today_parlay(today_str):
@@ -45,7 +38,7 @@ def check_existing_today_parlay(today_str):
             print(f"Today's parlay ({today_str}) is ALREADY LOCKED in Supabase.")
             return True
     except Exception as e:
-        print(f"Notice: Error checking existing bets from Supabase: {e}")
+        print(f"SUPABASE TABLE NOTICE: Make sure you created the 'bets' table in your Supabase SQL editor. Details: {e}")
     return False
 
 def fetch_odds(sport_key):
@@ -53,12 +46,14 @@ def fetch_odds(sport_key):
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        print(f"Fetched {len(data)} raw games for {sport_key}")
+        return data
     except Exception as e:
         print(f"Error fetching odds for {sport_key}: {e}")
         return []
 
-def filter_fatty_picks(data, today_str, target_min=-130, target_max=110):
+def filter_fatty_picks(data, today_str, target_min=-150, target_max=130):
     qualified = []
     for game in data:
         commence_raw = game.get('commence_time', '')
@@ -66,7 +61,6 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=110):
             continue
             
         game_date = commence_raw.split('T')[0]
-        # Match against today's date
         if game_date != today_str:
             continue
 
@@ -88,8 +82,8 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=110):
     return qualified
 
 def select_top_two(candidates):
+    print(f"Total qualified candidates matching odds range: {len(candidates)}")
     if len(candidates) < 2:
-        print("Not enough qualified same-day legs found.")
         return []
     
     unique_candidates = []
@@ -130,6 +124,6 @@ if __name__ == "__main__":
                 supabase.table('bets').insert(records).execute()
                 print(f"Successfully locked today's same-day 2-leg parlay for {today_str}!")
             except Exception as e:
-                print(f"Error inserting picks into Supabase: {e}")
+                print(f"Error inserting picks into Supabase (Ensure 'bets' table exists): {e}")
         else:
             print("Could not find 2 qualified legs strictly taking place today.")
