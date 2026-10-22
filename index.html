@@ -536,4 +536,43 @@
                 }
 
                 statusDiv.innerText = "Cloud runner active. Polling Supabase for new parlay...";
-                let
+                let elapsedSeconds = 0;
+                const initialId = currentLatestId;
+
+                const pollInterval = setInterval(async () => {
+                    elapsedSeconds += 3;
+                    
+                    try {
+                        const newBets = await fetchAllBets();
+                        if (newBets.length > 0 && newBets[0].id !== initialId) {
+                            clearInterval(pollInterval);
+                            statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
+                            setTimeout(() => location.reload(true), 600);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error("Polling error:", e);
+                    }
+
+                    if (elapsedSeconds < 120) {
+                        statusDiv.innerText = `Scanning sportsbooks... (${elapsedSeconds}s elapsed)`;
+                    } else {
+                        clearInterval(pollInterval);
+                        statusDiv.innerText = "Scan processing complete.";
+                        btn.innerText = "Generate Parlay";
+                        btn.disabled = false;
+                    }
+                }, 3000);
+
+            } catch (e) {
+                console.error(e);
+                statusDiv.innerText = "Network error calling trigger endpoint.";
+                btn.innerText = "Generate Parlay";
+                btn.disabled = false;
+            }
+        }
+
+        window.onload = loadTerminalData;
+    </script>
+</body>
+</html>
