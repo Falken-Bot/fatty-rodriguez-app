@@ -127,7 +127,7 @@ def save_parlay_direct_http(record):
         "Prefer": "return=representation"
     }
     
-    res = requests.post(target_endpoint, json=[record], headers=headers)
+    res = requests.post(target_endpoint, json=[record], headers=headers, timeout=10)
     if res.status_code in [200, 201]:
         print("SUCCESS: Saved 2-leg cross-sport parlay package directly to Supabase!")
     else:
