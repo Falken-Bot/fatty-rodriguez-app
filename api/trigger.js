@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     const OWNER = process.env.GITHUB_OWNER;
     const REPO = process.env.GITHUB_REPO;
-    const WORKFLOW_ID = 'main.yml'; // Change this if your GitHub Action YAML file has a different name
+    const WORKFLOW_ID = 'daily_scan.yml'; // Change this if your GitHub Action YAML file has a different name
 
     if (!GITHUB_TOKEN || !OWNER || !REPO) {
         return res.status(500).json({ 
