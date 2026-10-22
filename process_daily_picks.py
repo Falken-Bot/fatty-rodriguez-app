@@ -43,7 +43,6 @@ def filter_fatty_picks(data, today_str, target_min=-130, target_max=130):
         if not commence_raw:
             continue
 
-        # Convert UTC timestamp from API to Eastern Time YYYY-MM-DD
         try:
             utc_dt = datetime.fromisoformat(commence_raw.replace('Z', '+00:00'))
             et_dt = utc_dt.astimezone(et_tz)
@@ -76,17 +75,14 @@ def build_distilled_cross_sport_parlay(candidates):
         print("No qualified candidates found today.")
         return None
 
-    # Group candidates by sport and deduplicate matchups
     by_sport = {}
     for c in candidates:
         sport = c['sport']
         if sport not in by_sport:
             by_sport[sport] = []
-        
         if not any(existing['matchup'] == c['matchup'] for existing in by_sport[sport]):
             by_sport[sport].append(c)
 
-    # Sort candidates in each sport by proximity to -110 even money line
     for sport in by_sport:
         by_sport[sport].sort(key=lambda x: abs(x['odds'] + 110))
 
@@ -94,14 +90,12 @@ def build_distilled_cross_sport_parlay(candidates):
     print(f"Active sports available today with valid odds (ET local date): {available_sports}")
 
     if len(available_sports) < 2:
-        print(f"CRITICAL: Cannot build cross-sport parlay. Found only 1 active sport today ({available_sports}).")
+        print(f"CRITICAL ERROR: Found only 1 active sport today ({available_sports}). Need at least 2 distinct sports.")
         return None
 
-    # Force Leg 1 from Sport 1, Leg 2 from Sport 2
     leg1 = by_sport[available_sports[0]][0]
     leg2 = by_sport[available_sports[1]][0]
 
-    # Find a distinct candidate for Leg 3 (Distilled Out)
     leg3 = None
     if len(available_sports) >= 3 and len(by_sport[available_sports[2]]) > 0:
         leg3 = by_sport[available_sports[2]][0]
@@ -138,6 +132,7 @@ def save_parlay_direct_http(record):
         print("SUCCESS: Saved 2-leg cross-sport parlay package directly to Supabase!")
     else:
         print(f"Supabase HTTP Error ({res.status_code}): {res.text}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     today_str = get_today_str_et()
@@ -171,3 +166,4 @@ if __name__ == "__main__":
         save_parlay_direct_http(record)
     else:
         print("Could not build a qualifying cross-sport parlay today.")
+        sys.exit(1)
