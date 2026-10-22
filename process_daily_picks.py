@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 from datetime import datetime
+import zoneinfo
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ejnwsxbpuumcpyxnmsaz.supabase.co").strip().rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp").strip()
@@ -10,7 +11,6 @@ ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "").strip()
 if "/rest/v1" in SUPABASE_URL:
     SUPABASE_URL = SUPABASE_URL.split("/rest/v1")[0]
 
-# Expanded list of major US sports markets
 SPORTS_LIST = [
     "americanfootball_nfl",
     "americanfootball_ncaaf",
@@ -21,12 +21,8 @@ SPORTS_LIST = [
 ]
 
 def get_today_str_et():
-    try:
-        import zoneinfo
-        et_tz = zoneinfo.ZoneInfo("America/New_York")
-        return datetime.now(et_tz).strftime("%Y-%m-%d")
-    except Exception:
-        return datetime.utcnow().strftime("%Y-%m-%d")
+    et_tz = zoneinfo.ZoneInfo("America/New_York")
+    return datetime.now(et_tz).strftime("%Y-%m-%d")
 
 def fetch_odds(sport_key):
     url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american"
@@ -40,9 +36,22 @@ def fetch_odds(sport_key):
 
 def filter_fatty_picks(data, today_str, target_min=-130, target_max=130):
     qualified = []
+    et_tz = zoneinfo.ZoneInfo("America/New_York")
+
     for game in data:
         commence_raw = game.get('commence_time', '')
-        if not commence_raw or commence_raw.split('T')[0] != today_str:
+        if not commence_raw:
+            continue
+
+        # Convert UTC timestamp from API to Eastern Time YYYY-MM-DD
+        try:
+            utc_dt = datetime.fromisoformat(commence_raw.replace('Z', '+00:00'))
+            et_dt = utc_dt.astimezone(et_tz)
+            game_date_et = et_dt.strftime("%Y-%m-%d")
+        except Exception:
+            game_date_et = commence_raw.split('T')[0]
+
+        if game_date_et != today_str:
             continue
 
         for bookmaker in game.get('bookmakers', []):
@@ -82,7 +91,7 @@ def build_distilled_cross_sport_parlay(candidates):
         by_sport[sport].sort(key=lambda x: abs(x['odds'] + 110))
 
     available_sports = list(by_sport.keys())
-    print(f"Active sports available today with valid odds: {available_sports}")
+    print(f"Active sports available today with valid odds (ET local date): {available_sports}")
 
     if len(available_sports) < 2:
         print(f"CRITICAL: Cannot build cross-sport parlay. Found only 1 active sport today ({available_sports}).")
@@ -97,7 +106,6 @@ def build_distilled_cross_sport_parlay(candidates):
     if len(available_sports) >= 3 and len(by_sport[available_sports[2]]) > 0:
         leg3 = by_sport[available_sports[2]][0]
     else:
-        # Fallback to second best matchup in Sport 1 or Sport 2
         for s in available_sports:
             for item in by_sport[s]:
                 if item['matchup'] != leg1['matchup'] and item['matchup'] != leg2['matchup']:
