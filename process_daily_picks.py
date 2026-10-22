@@ -12,7 +12,6 @@ SPORTS = [
     "icehockey_nhl",
     "basketball_nba",
     "americanfootball_nfl",
-    "basketball_ncaab"
 ]
 
 def fetch_odds_for_sport(sport):
