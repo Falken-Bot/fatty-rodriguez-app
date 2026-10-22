@@ -312,7 +312,7 @@
 
             return {
                 l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
-                l2: 'Single-sport legacy format. Run a fresh cross-sport scan.',
+                l2: 'Single-sport legacy format detected.',
                 l3: 'Candidate Leg 3 distilled out during odds filtering.'
             };
         }
@@ -408,7 +408,7 @@
                     return;
                 }
 
-                statusDiv.innerText = "Runner active. Polling database for results...";
+                statusDiv.innerText = "Cloud runner active. Polling Supabase for new parlay...";
                 let elapsedSeconds = 0;
                 const initialId = currentLatestId;
 
@@ -419,19 +419,19 @@
                         const newBets = await fetchLatestRows();
                         if (newBets.length > 0 && newBets[0].id !== initialId) {
                             clearInterval(pollInterval);
-                            statusDiv.innerText = "New cross-sport parlay locked! Refreshing...";
-                            setTimeout(() => location.reload(true), 800);
+                            statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
+                            setTimeout(() => location.reload(true), 600);
                             return;
                         }
                     } catch (e) {
                         console.error("Polling error:", e);
                     }
 
-                    if (elapsedSeconds < 75) {
-                        statusDiv.innerText = `Analyzing sportsbooks... (${elapsedSeconds}s)`;
+                    if (elapsedSeconds < 120) {
+                        statusDiv.innerText = `Scanning sportsbooks... (${elapsedSeconds}s elapsed)`;
                     } else {
                         clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan complete. No new cross-sport parlay matched criteria today.";
+                        statusDiv.innerText = "Scan processing. Click refresh or check back shortly.";
                         btn.innerText = "Generate Parlay";
                         btn.disabled = false;
                     }
