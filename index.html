@@ -292,7 +292,6 @@
         }
 
         function parseBets(betsList) {
-            // Priority 1: Check for single combined record storing all 3 legs via '||'
             const newest = betsList[0];
             const rawPick = newest ? (newest.pick || '') : '';
 
@@ -305,7 +304,6 @@
                 };
             }
 
-            // Priority 2: If stored as separate rows in database
             if (betsList.length >= 2) {
                 const b1 = betsList[0];
                 const b2 = betsList[1];
@@ -317,7 +315,6 @@
                 };
             }
 
-            // Fallback for single old record
             return {
                 l1: `${newest.sport || 'Sports'} | ${newest.matchup || ''} | Pick: ${newest.pick || ''} (${newest.odds > 0 ? '+' : ''}${newest.odds})`,
                 l2: 'Awaiting next automated cross-sport scan...',
@@ -329,9 +326,9 @@
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
 
-            // Fetch newest records by ID descending to ensure latest scan is loaded
             const cacheBuster = new Date().getTime();
-            let url = `${SUPABASE_URL}/rest/v1/bets?event_date=like.${todayStr}*&select=*&order=id.desc&_cb=${cacheBuster}`;
+            // Pull the absolute latest saved row directly by ID
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1&_cb=${cacheBuster}`;
             
             try {
                 let response = await fetch(url, {
@@ -341,18 +338,6 @@
                     }
                 });
                 let bets = await response.json();
-
-                // Fallback query if exact date filter returns nothing
-                if (!Array.isArray(bets) || bets.length === 0) {
-                    const fallbackUrl = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=3&_cb=${cacheBuster}`;
-                    response = await fetch(fallbackUrl, {
-                        headers: {
-                            "apikey": SUPABASE_KEY,
-                            "Authorization": `Bearer ${SUPABASE_KEY}`
-                        }
-                    });
-                    bets = await response.json();
-                }
                 
                 const container = document.getElementById('parlay-container');
                 if (Array.isArray(bets) && bets.length > 0) {
