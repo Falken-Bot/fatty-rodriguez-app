@@ -15,6 +15,7 @@
             --border-color: #2A2A30;
             --red-cut: #FF4D4D;
             --badge-bg: #1F1F26;
+            --logic-bg: #17171D;
         }
 
         body {
@@ -131,13 +132,12 @@
             padding-bottom: 12px;
         }
 
-        /* High-Impact Pick Card Styling */
         .leg-box {
             background: var(--badge-bg);
             border: 1px solid var(--border-color);
-            padding: 18px 22px;
+            padding: 20px 22px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 18px;
         }
 
         .leg-box.active-leg {
@@ -200,7 +200,23 @@
             font-weight: 900;
             color: var(--text-main);
             letter-spacing: 0.5px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 12px;
+        }
+
+        /* Analytical Rationale Write-up Box */
+        .rationale-box {
+            background: var(--logic-bg);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--gold);
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .rationale-box strong {
+            color: var(--text-main);
         }
 
         .distill-reason {
@@ -213,7 +229,6 @@
             line-height: 1.4;
         }
 
-        /* History Ledger Styling */
         .history-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -320,7 +335,6 @@
     </header>
 
     <div class="main-container">
-        <!-- Active Parlay Section -->
         <div class="section-title">
             <span>Today's Locked 2-Leg Parlay</span>
             <span id="current-date-display"></span>
@@ -332,14 +346,12 @@
             </div>
         </div>
 
-        <!-- Manual Control Panel -->
         <div class="action-panel">
             <p>Manual executive control panel for triggering live sportsbook scans and cross-sport distillation.</p>
             <button id="generate-btn" class="generate-btn" onclick="triggerManualScan()">Generate Parlay</button>
             <div id="scan-status" class="scan-status-msg"></div>
         </div>
 
-        <!-- Historical Ledger Section -->
         <div class="section-title">
             <span>Historical Ledger & Performance Archive</span>
         </div>
@@ -372,207 +384,4 @@
             const parts = formatter.formatToParts(now);
             const m = parts.find(p => p.type === 'month').value;
             const d = parts.find(p => p.type === 'day').value;
-            const y = parts.find(p => p.type === 'year').value;
-            return `${y}-${m}-${d}`;
-        }
-
-        // Intelligent parser to break raw string into formatted components
-        function renderPickBox(rawLegStr, isCut = false) {
-            // Expected format: "NHL | Pittsburgh Penguins vs Florida Panthers | Pick: Florida Panthers (-105)"
-            let cleanStr = rawLegStr.replace(/^(LEG1?:|LEG2?:|DROPPED:)/, '').trim();
-            
-            if (!cleanStr || cleanStr.includes('Single-sport') || cleanStr.includes('No active')) {
-                return `
-                    <div class="leg-header-row">
-                        <span class="leg-label ${isCut ? 'cut' : 'active'}">${isCut ? 'Distilled Out (Candidate Leg 3)' : 'Active Leg'}</span>
-                    </div>
-                    <div class="selection-display">${cleanStr}</div>
-                `;
-            }
-
-            let parts = cleanStr.split('|').map(p => p.trim());
-            let sport = parts[0] || 'SPORTS';
-            let matchup = parts[1] || 'Matchup TBD';
-            let selection = parts.slice(2).join(' | ') || cleanStr;
-
-            return `
-                <div class="leg-header-row">
-                    <span class="leg-label ${isCut ? 'cut' : 'active'}">${isCut ? 'Distilled Out (Candidate Leg 3)' : 'Active Parlay Leg'}</span>
-                    <span class="sport-badge ${isCut ? 'cut-sport' : ''}">${sport}</span>
-                </div>
-                <div class="matchup-title">${matchup}</div>
-                <div class="selection-display">${selection}</div>
-            `;
-        }
-
-        function parsePickString(rawPick) {
-            if (rawPick.includes('||')) {
-                const parts = rawPick.split('||');
-                return {
-                    l1: parts[0] ? parts[0].trim() : '',
-                    l2: parts[1] ? parts[1].trim() : '',
-                    l3: parts[2] ? parts[2].trim() : ''
-                };
-            }
-            return {
-                l1: rawPick,
-                l2: '',
-                l3: ''
-            };
-        }
-
-        async function fetchAllBets() {
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=15`;
-            let response = await fetch(url, {
-                cache: 'no-store',
-                headers: {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`Supabase Error ${response.status}: ${await response.text()}`);
-            }
-            let bets = await response.json();
-            return Array.isArray(bets) ? bets : [];
-        }
-
-        async function loadTerminalData() {
-            const todayStr = getTodayStrET();
-            document.getElementById('current-date-display').innerText = todayStr;
-            const parlayContainer = document.getElementById('parlay-container');
-            const historyContainer = document.getElementById('history-container');
-
-            try {
-                const bets = await fetchAllBets();
-                if (bets.length > 0) {
-                    currentLatestId = bets[0].id;
-                    
-                    // 1. Render Active Top Parlay with high-impact layout
-                    const latestParsed = parsePickString(bets[0].pick);
-                    parlayContainer.innerHTML = `
-                        <div class="parlay-card">
-                            <h3>
-                                <span>FATTY'S 2-LEG CROSS-SPORT PARLAY</span>
-                                <span>$${Number(bets[0].wager_amount || 2).toFixed(2)} BASE WAGER</span>
-                            </h3>
-                            
-                            <div class="leg-box active-leg">
-                                ${renderPickBox(latestParsed.l1, false)}
-                            </div>
-
-                            <div class="leg-box active-leg">
-                                ${renderPickBox(latestParsed.l2, false)}
-                            </div>
-
-                            <div class="leg-box cut-leg">
-                                ${renderPickBox(latestParsed.l3, true)}
-                            </div>
-
-                            <div class="distill-reason">
-                                <strong>Date Locked:</strong> ${bets[0].event_date} &nbsp;|&nbsp; 
-                                <strong>System Status:</strong> <span style="color: var(--gold);">${bets[0].status.toUpperCase()}</span> &nbsp;|&nbsp; 
-                                <strong>Rationale:</strong> Candidate leg 3 was distilled out to lock in the highest-probability 2-leg cross-sport baseline.
-                            </div>
-                        </div>
-                    `;
-
-                    // 2. Render Historical Ledger
-                    if (bets.length > 1) {
-                        let historyHTML = '';
-                        for (let i = 1; i < bets.length; i++) {
-                            const b = bets[i];
-                            historyHTML += `
-                                <div class="history-card">
-                                    <div class="history-header">
-                                        <span>DATE: ${b.event_date} &nbsp;|&nbsp; RECORD ID #${b.id}</span>
-                                        <span>STATUS: ${b.status.toUpperCase()} &nbsp;|&nbsp; WAGER: $${Number(b.wager_amount || 2).toFixed(2)}</span>
-                                    </div>
-                                    <div class="history-summary">${b.pick}</div>
-                                </div>
-                            `;
-                        }
-                        historyContainer.innerHTML = historyHTML;
-                    } else {
-                        historyContainer.innerHTML = `
-                            <div class="history-card">
-                                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">No prior historical records found in ledger yet.</p>
-                            </div>
-                        `;
-                    }
-
-                } else {
-                    parlayContainer.innerHTML = `<div class="parlay-card"><p>No bets returned from database query.</p></div>`;
-                    historyContainer.innerHTML = `<div class="history-card"><p>No history available.</p></div>`;
-                }
-            } catch (err) {
-                console.error("Error loading terminal data:", err);
-                parlayContainer.innerHTML = `
-                    <div class="parlay-card" style="border-left-color: #FF4D4D;">
-                        <h3 style="color: #FF4D4D;">DATABASE ERROR</h3>
-                        <p>${err.message}</p>
-                    </div>
-                `;
-            }
-        }
-
-        async function triggerManualScan() {
-            const btn = document.getElementById('generate-btn');
-            const statusDiv = document.getElementById('scan-status');
-
-            btn.innerText = "Scanning Markets...";
-            btn.disabled = true;
-            statusDiv.innerText = "Dispatching cloud workflow...";
-
-            try {
-                const res = await fetch('/api/trigger', { method: 'POST' });
-                const data = await res.json();
-
-                if (!res.ok) {
-                    statusDiv.innerText = `Error: ${data.error || 'Trigger failed'}`;
-                    btn.innerText = "Generate Parlay";
-                    btn.disabled = false;
-                    return;
-                }
-
-                statusDiv.innerText = "Cloud runner active. Polling Supabase for new parlay...";
-                let elapsedSeconds = 0;
-                const initialId = currentLatestId;
-
-                const pollInterval = setInterval(async () => {
-                    elapsedSeconds += 3;
-                    
-                    try {
-                        const newBets = await fetchAllBets();
-                        if (newBets.length > 0 && newBets[0].id !== initialId) {
-                            clearInterval(pollInterval);
-                            statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
-                            setTimeout(() => location.reload(true), 600);
-                            return;
-                        }
-                    } catch (e) {
-                        console.error("Polling error:", e);
-                    }
-
-                    if (elapsedSeconds < 120) {
-                        statusDiv.innerText = `Scanning sportsbooks... (${elapsedSeconds}s elapsed)`;
-                    } else {
-                        clearInterval(pollInterval);
-                        statusDiv.innerText = "Scan processing complete.";
-                        btn.innerText = "Generate Parlay";
-                        btn.disabled = false;
-                    }
-                }, 3000);
-
-            } catch (e) {
-                console.error(e);
-                statusDiv.innerText = "Network error calling trigger endpoint.";
-                btn.innerText = "Generate Parlay";
-                btn.disabled = false;
-            }
-        }
-
-        window.onload = loadTerminalData;
-    </script>
-</body>
-</html>
+            const y = parts.
