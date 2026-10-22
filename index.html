@@ -1,324 +1,285 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fatty Rodriguez Betting System</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            bg: '#090d16',
-                            card: '#111827',
-                            border: '#1f2937',
-                            green: '#10b981',
-                            gold: '#f59e0b'
-                        }
-                    }
-                }
-            }
+    <title>Fatty Rodriguez | Executive Sports Terminal</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0c;
+            --card-bg: #141418;
+            --gold: #FFD700;
+            --gold-dark: #FFA500;
+            --text-main: #FFFFFF;
+            --text-muted: #A0A0A5;
+            --border-color: #2A2A30;
         }
-    </script>
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .fatty-header {
+            background: var(--bg-color);
+            border-bottom: 2px solid var(--gold);
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .fatty-badge-logo {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            border: 2px solid var(--gold);
+            object-fit: cover;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+        
+        .brand-title-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .brand-name {
+            font-weight: 900;
+            font-size: 26px;
+            letter-spacing: 2px;
+            color: var(--text-main);
+            margin: 0;
+            text-transform: uppercase;
+        }
+        
+        .brand-tagline {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--gold);
+            margin-top: 2px;
+            text-transform: uppercase;
+        }
+
+        .main-container {
+            max-width: 800px;
+            width: 100%;
+            margin: 40px auto;
+            padding: 0 20px;
+            box-sizing: border-box;
+            flex: 1;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: var(--gold);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .parlay-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .bet-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--gold);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .bet-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bet-card p {
+            margin: 6px 0;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .bet-card p strong {
+            color: var(--text-main);
+        }
+
+        .action-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .action-panel p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .generate-btn {
+            background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+            color: #000;
+            border: none;
+            padding: 14px 30px;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .generate-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .generate-btn:active {
+            transform: translateY(1px);
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
 </head>
-<body class="bg-brand-bg text-slate-100 min-h-screen font-sans antialiased selection:bg-amber-400 selection:text-slate-950">
+<body>
 
-    <!-- Streamlined Executive Header Navigation -->
-<header class="fatty-header">
-  <div class="logo-container">
-    <!-- Streamlined High-Impact SVG Logo Mark -->
-    <svg class="fatty-logo-mark" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#FFD700" />
-          <stop offset="100%" stop-color="#FFA500" />
-        </linearGradient>
-      </defs>
-      <!-- Shield Base -->
-      <path d="M60 5L105 20V55C105 82 85 102 60 115C35 102 15 82 15 55V20L60 5Z" fill="#121212" stroke="url(#goldGrad)" stroke-width="4"/>
-      <!-- Inner Accent Lines -->
-      <path d="M60 15L95 27V53C95 76 78 93 60 104C42 93 25 76 25 53V27L60 15Z" stroke="#2A2A2A" stroke-width="2"/>
-      <!-- Monogram 'FR' -->
-      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="url(#goldGrad)" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="42" letter-spacing="-2">FR</text>
-      <!-- Bottom Star / Crown Pin -->
-      <polygon points="60,92 63,98 70,99 65,104 67,110 60,107 53,110 55,104 50,99 57,98" fill="url(#goldGrad)"/>
-    </svg>
-    
-    <div class="brand-title-group">
-      <h1 class="brand-name">FATTY RODRIGUEZ</h1>
-      <span class="brand-tagline">EXECUTIVE SPORTS TERMINAL</span>
-    </div>
-  </div>
-</header>
-
-<style>
-  .fatty-header {
-    background: #0a0a0c;
-    border-bottom: 2px solid #FFD700;
-    padding: 20px 30px;
-    display: flex;
-    align-items: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-  }
-  
-  .logo-container {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-  
-  .fatty-logo-mark {
-    width: 64px;
-    height: 64px;
-    filter: drop-shadow(0 4px 10px rgba(255, 215, 0, 0.3));
-  }
-  
-  .brand-title-group {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .brand-name {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-weight: 900;
-    font-size: 28px;
-    letter-spacing: 2px;
-    color: #FFFFFF;
-    margin: 0;
-    text-transform: uppercase;
-    background: linear-gradient(90deg, #FFFFFF 60%, #FFD700 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  .brand-tagline {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 4px;
-    color: #FFD700;
-    margin-top: 2px;
-    text-transform: uppercase;
-  }
-</style>
+    <header class="fatty-header">
+      <div class="logo-container">
+        <img src="assets/logo.jpg" alt="Fatty Rodriguez Logo" class="fatty-badge-logo">
+        <div class="brand-title-group">
+          <h1 class="brand-name">FATTY RODRIGUEZ</h1>
+          <span class="brand-tagline">EXECUTIVE SPORTS TERMINAL</span>
+        </div>
+      </div>
     </header>
 
-    <!-- Main Dashboard Container -->
-    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div class="main-container">
+        <div class="section-title">
+            <span>Today's Locked Parlay</span>
+            <span id="current-date-display"></span>
+        </div>
 
-        <!-- Today's Locked Parlay -->
-        <section class="bg-brand-card rounded-2xl p-6 border border-brand-border shadow-2xl space-y-4">
-            <div class="flex justify-between items-center border-b border-brand-border pb-3">
-                <div>
-                    <h2 class="text-xl font-black text-white flex items-center space-x-2">
-                        <span>TODAY'S LOCKED PARLAY</span>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">SAME-DAY</span>
-                    </h2>
-                    <p class="text-xs text-slate-400">Locked 2-leg cross-sport wager ($2 allocation)</p>
-                </div>
-                <div id="todayDateDisplay" class="text-xs font-mono font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-lg border border-amber-400/20">
-                    --/--/----
-                </div>
+        <div id="parlay-container" class="parlay-grid">
+            <div class="bet-card">
+                <p>Loading today's locked bets from database...</p>
             </div>
+        </div>
 
-            <!-- Container for picks -->
-            <div id="picksContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="col-span-2 text-center py-10 bg-slate-950/50 rounded-xl border border-brand-border border-dashed">
-                    <i data-lucide="loader" class="w-6 h-6 text-amber-400 animate-spin mx-auto mb-2"></i>
-                    <p class="text-sm text-slate-300 font-bold">Checking Supabase for today's locked parlay...</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Parlay Bet Log & Tracker -->
-        <section class="bg-brand-card rounded-2xl p-6 border border-brand-border shadow-2xl space-y-4">
-            <div class="border-b border-brand-border pb-3">
-                <h2 class="text-xl font-black text-white">PARLAY BET TRACKER</h2>
-                <p class="text-xs text-slate-400">Historical $2 wager log and settlement records</p>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs text-slate-300">
-                    <thead class="bg-slate-950 text-slate-400 uppercase font-mono border-b border-brand-border">
-                        <tr>
-                            <th class="py-2.5 px-3">Date</th>
-                            <th class="py-2.5 px-3">Sport</th>
-                            <th class="py-2.5 px-3">Matchup</th>
-                            <th class="py-2.5 px-3">Selection</th>
-                            <th class="py-2.5 px-3">Odds</th>
-                            <th class="py-2.5 px-3">Wager</th>
-                            <th class="py-2.5 px-3">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="betHistoryTable" class="divide-y divide-brand-border/50">
-                        <tr>
-                            <td colspan="7" class="text-center py-4 text-slate-500">No historical bets logged yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-brand-card border border-brand-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div class="flex justify-between items-center border-b border-brand-border pb-3">
-                <h3 class="text-lg font-black text-white">System Rules</h3>
-                <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="space-y-3 text-xs text-slate-300">
-                <div class="p-3 bg-slate-950 rounded-lg border border-brand-border">
-                    <div class="font-bold text-amber-400 mb-0.5">1. Same-Day Action Only</div>
-                    <p class="text-slate-400">Evaluates games strictly starting on today's date in Eastern Time.</p>
-                </div>
-                <div class="p-3 bg-slate-950 rounded-lg border border-brand-border">
-                    <div class="font-bold text-amber-400 mb-1">2. Target Odds Range</div>
-                    <p class="text-slate-400">Evaluates straight lines, point spreads, and game totals from -130 to +110.</p>
-                </div>
-                <div class="p-3 bg-slate-950 rounded-lg border border-brand-border">
-                    <div class="font-bold text-amber-400 mb-1">3. Date Lock</div>
-                    <p class="text-slate-400">Once generated, today's 2-leg parlay locks into Supabase and will not alter upon re-scans.</p>
-                </div>
-            </div>
-            <button onclick="closeModal('settingsModal')" class="w-full py-2.5 bg-amber-500 text-slate-950 font-black rounded-xl transition hover:bg-amber-400">
-                Close
-            </button>
+        <div class="action-panel">
+            <p>Manual control panel for triggering odds scan and parlay selection.</p>
+            <button id="generate-btn" class="generate-btn" onclick="triggerManualScan()">Generate Parlay</button>
         </div>
     </div>
 
-    <!-- Script Logic -->
+    <footer>
+        FATTY RODRIGUEZ ANALYTICAL PARLAYS &copy; 2026
+    </footer>
+
     <script>
-        // --- 1. SUPABASE CONFIGURATION ---
-        // REPLACE WITH YOUR ACTUAL SUPABASE CREDENTIALS
-        const SUPABASE_URL = "https://ejnwsxbpuumcpyxnmsaz.supabase.co/rest/v1/";
+        // Make sure these match your Supabase configuration
+        const SUPABASE_URL = "https://ejnwsxbpuumcpyxnmsaz.supabase.co/rest/v1";
         const SUPABASE_KEY = "sb_publishable_M4seLrgZoXLBY9m01uMa1Q_ZFHBW1Dp";
 
-        let _supabase = null;
-        if (SUPABASE_URL !== "YOUR_SUPABASE_URL_HERE") {
-            _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        }
+        document.getElementById('current-date-display').innerText = new Date().toISOString().split('T')[0];
 
-        function getTodayET() {
-            return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-        }
-
-        // --- 2. MAIN SCAN & LOCK HANDLER ---
-        async function handleScanButtonClick() {
-            const todayStr = getTodayET();
-            document.getElementById('todayDateDisplay').innerText = todayStr;
-
-            if (!_supabase) {
-                alert("Please paste your real Supabase credentials inside index.html!");
-                return;
-            }
-
+        async function loadTodayBets() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const url = `${SUPABASE_URL}/rest/v1/bets?event_date=eq.${todayStr}&select=*`;
+            
             try {
-                // Step A: Check Supabase FIRST for today's locked parlay
-                const { data: existingBets, error } = await _supabase
-                    .from('bets')
-                    .select('*')
-                    .eq('event_date', todayStr);
-
-                if (error) console.error("Supabase Error:", error);
-
-                // Step B: If today's parlay already exists, load it and DO NOT generate new picks
-                if (existingBets && existingBets.length >= 2) {
-                    renderPicksToDashboard(existingBets);
-                    renderBetHistoryTable(existingBets);
-                    return;
-                }
-
-                // Step C: If no parlay exists for today, trigger the secure Vercel backend route
-                alert("No locked parlay found for today yet. Triggering today's cloud scan...");
-                await triggerGitHubScan();
-
-            } catch (err) {
-                console.error("Execution Error:", err);
-            }
-        }
-
-        // --- 3. TRIGGER CLOUD SCAN VIA VERCEL SERVERLESS FUNCTION ---
-        async function triggerGitHubScan() {
-            try {
-                const response = await fetch('/api/trigger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                const response = await fetch(url, {
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`
+                    }
                 });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    alert("Scan command sent! The cross-sport engine is running in the cloud. Refresh the page in ~30 seconds for today's locked picks.");
+                const bets = await response.json();
+                
+                const container = document.getElementById('parlay-container');
+                if (bets && bets.length > 0) {
+                    container.innerHTML = bets.map(b => `
+                        <div class="bet-card">
+                            <h3>${b.sport}</h3>
+                            <p><strong>Matchup:</strong> ${b.matchup}</p>
+                            <p><strong>Pick:</strong> ${b.pick} (${b.odds > 0 ? '+' + b.odds : b.odds})</p>
+                            <p><strong>Wager:</strong> $${Number(b.wager_amount).toFixed(2)}</p>
+                        </div>
+                    `).join('');
                 } else {
-                    alert("Could not trigger scan: " + (result.error || "Check Vercel environment variables."));
+                    container.innerHTML = `
+                        <div class="bet-card">
+                            <p>No locked parlay found for today (${todayStr}). Use the button below to run a scan.</p>
+                        </div>
+                    `;
                 }
             } catch (err) {
-                alert("Error calling trigger endpoint: " + err.message);
+                console.error("Error loading bets:", err);
+                document.getElementById('parlay-container').innerHTML = `
+                    <div class="bet-card">
+                        <p>Error connecting to database. Please check configuration.</p>
+                    </div>
+                `;
             }
         }
 
-        // --- 4. RENDER PICKS TO DASHBOARD ---
-        function renderPicksToDashboard(bets) {
-            const container = document.getElementById('picksContainer');
-            if (!container) return;
+        async function triggerManualScan() {
+            const btn = document.getElementById('generate-btn');
+            btn.innerText = "Scanning Markets...";
+            btn.disabled = true;
 
-            container.innerHTML = bets.map(bet => `
-                <div class="p-4 rounded-xl bg-slate-950 border border-amber-400/30 shadow-lg space-y-2">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-black text-amber-400 uppercase tracking-wider bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">${bet.sport}</span>
-                        <span class="text-[10px] font-mono text-slate-400">${bet.event_date}</span>
-                    </div>
-                    <div class="text-lg font-black text-white">${bet.pick}</div>
-                    <div class="text-xs text-slate-300 font-medium">${bet.matchup}</div>
-                    <div class="pt-2 border-t border-slate-800 flex justify-between items-center text-xs font-mono">
-                        <span class="text-emerald-400 font-bold">Odds: ${bet.odds > 0 ? '+' + bet.odds : bet.odds}</span>
-                        <span class="text-amber-400 font-bold">Wager: $${bet.wager_amount}</span>
-                    </div>
-                </div>
-            `).join('');
+            try {
+                const res = await fetch('/api/trigger', { method: 'POST' });
+                if (res.ok) {
+                    alert("Scan triggered successfully! Refreshing page in 10 seconds...");
+                    setTimeout(() => location.reload(), 10000);
+                } else {
+                    alert("Trigger failed. Check serverless function logs.");
+                    btn.innerText = "Generate Parlay";
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Network error calling trigger endpoint.");
+                btn.innerText = "Generate Parlay";
+                btn.disabled = false;
+            }
         }
 
-        // --- 5. RENDER BET TABLE ---
-        function renderBetHistoryTable(bets) {
-            const tbody = document.getElementById('betHistoryTable');
-            if (!tbody || !bets.length) return;
-
-            tbody.innerHTML = bets.map(bet => `
-                <tr class="hover:bg-slate-800/40 transition">
-                    <td class="py-2.5 px-3 font-mono text-[11px]">${bet.event_date}</td>
-                    <td class="py-2.5 px-3 uppercase text-[11px] text-amber-400 font-bold">${bet.sport}</td>
-                    <td class="py-2.5 px-3">${bet.matchup}</td>
-                    <td class="py-2.5 px-3 font-bold text-white">${bet.pick}</td>
-                    <td class="py-2.5 px-3 font-mono">${bet.odds}</td>
-                    <td class="py-2.5 px-3 font-mono">$${bet.wager_amount}</td>
-                    <td class="py-2.5 px-3">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${bet.status === 'win' ? 'bg-emerald-500/20 text-emerald-400' : bet.status === 'loss' ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-300'}">
-                            ${bet.status}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            document.getElementById('todayDateDisplay').innerText = getTodayET();
-            handleScanButtonClick();
-        });
+        window.onload = loadTodayBets;
     </script>
 </body>
 </html>
