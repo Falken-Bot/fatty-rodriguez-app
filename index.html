@@ -326,13 +326,14 @@
             const todayStr = getTodayStrET();
             document.getElementById('current-date-display').innerText = todayStr;
 
-            const cacheBuster = new Date().getTime();
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1&_cb=${cacheBuster}`;
+            // Clean PostgREST query parameters (no unrecognized params)
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=1`;
             
             const container = document.getElementById('parlay-container');
 
             try {
                 let response = await fetch(url, {
+                    cache: 'no-store', // Prevents browser caching cleanly
                     headers: {
                         "apikey": SUPABASE_KEY,
                         "Authorization": `Bearer ${SUPABASE_KEY}`
