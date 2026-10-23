@@ -45,7 +45,9 @@ def fetch_completed_scores(sport_key):
     try:
         res = requests.get(url, params=params)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            print(f"DEBUG: Fetched {len(data)} games for {sport_key}")
+            return data
         print(f"Error fetching scores for {sport_key} ({res.status_code}): {res.text}")
         return []
     except Exception as e:
@@ -53,7 +55,7 @@ def fetch_completed_scores(sport_key):
         return []
 
 def parse_leg(leg_str):
-    clean = leg_str.replace("LEG1:", "").replace("LEG2:", "").replace("DROPPED:", "").trim() if hasattr(leg_str, 'trim') else leg_str.replace("LEG1:", "").replace("LEG2:", "").replace("DROPPED:", "").strip()
+    clean = leg_str.replace("LEG1:", "").replace("LEG2:", "").replace("DROPPED:", "").strip()
     parts = [p.strip() for p in clean.split('|')]
     if len(parts) < 3:
         return None
@@ -84,40 +86,49 @@ def parse_parlay(pick_payload):
 def evaluate_leg_outcome(leg, scores_by_sport):
     sport_key = SPORTS_KEYS.get(leg["sport"])
     if not sport_key:
+        print(f"DEBUG: Unknown sport key for '{leg['sport']}'")
         return None  # Unknown sport
 
     scores = scores_by_sport.get(sport_key, [])
-    picked_team = leg["team"]
+    picked_team = leg["team"].lower()
 
     for game in scores:
-        if not game.get("completed", False):
-            continue
-
         home_team = game.get("home_team", "")
         away_team = game.get("away_team", "")
+        completed = game.get("completed", False)
 
-        if picked_team not in [home_team, away_team]:
+        # Debug print all games checked
+        print(f"DEBUG: Checking game [{away_team} @ {home_team}] | Completed: {completed} | Looking for pick: {leg['team']}")
+
+        if not completed:
+            continue
+
+        if picked_team not in [home_team.lower(), away_team.lower()]:
             continue
 
         game_scores = game.get("scores", [])
         if not game_scores or len(game_scores) < 2:
+            print(f"DEBUG: Game completed but scores array invalid: {game_scores}")
             continue
 
         home_score = 0
         away_score = 0
         for s in game_scores:
-            if s.get("name") == home_team:
+            if s.get("name", "").lower() == home_team.lower():
                 home_score = int(s.get("score", 0))
-            elif s.get("name") == away_team:
+            elif s.get("name", "").lower() == away_team.lower():
                 away_score = int(s.get("score", 0))
+
+        print(f"DEBUG: Final Score - {away_team}: {away_score} vs {home_team}: {home_score}")
 
         if home_score == away_score:
             return "push"
 
         winning_team = home_team if home_score > away_score else away_team
-        return "win" if winning_team == picked_team else "loss"
+        is_win = winning_team.lower() == picked_team
+        return "win" if is_win else "loss"
 
-    return None  # Game not yet completed
+    return None  # Game not yet completed or name mismatch
 
 def update_bet_status(bet_id, new_status):
     endpoint = get_supabase_endpoint()
@@ -165,11 +176,8 @@ def main():
             res = evaluate_leg_outcome(leg, scores_by_sport)
             leg_results.append(res)
 
-        # Decision Matrix:
-        # If any leg is None -> games still pending
-        # If any leg is 'loss' -> parlay lost
-        # If all legs 'win' -> parlay won
-        # If any leg 'push' and others 'win' -> push
+        print(f"DEBUG: Bet #{bet_id} leg results evaluation: {leg_results}")
+
         if None in leg_results:
             print(f"Bet #{bet_id}: Games still pending or scores not finalized yet.")
             continue
