@@ -11,7 +11,7 @@ ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 SPORTS = [
     "icehockey_nhl",
     "basketball_nba",
-    "americanfootball_nfl",
+    "americanfootball_nfl"
 ]
 
 def fetch_odds_for_sport(sport):
@@ -23,63 +23,54 @@ def fetch_odds_for_sport(sport):
         "oddsFormat": "american"
     }
     try:
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code == 200:
-            return response.json()
+        res = requests.get(url, params=params)
+        if res.status_code == 200:
+            return res.json()
+        print(f"Odds API error ({res.status_code}) for {sport}: {res.text}")
+        return []
     except Exception as e:
-        print(f"Error fetching {sport}: {e}")
-    return []
+        print(f"Failed to fetch odds for {sport}: {e}")
+        return []
 
-def calculate_implied_prob(odds):
-    if odds > 0:
-        return 100 / (odds + 100)
-    else:
-        return abs(odds) / (abs(odds) + 100)
-
-def handicap_candidate(game, outcome):
-    """
-    Sports-centric handicapping layer:
-    - Evaluates recent form trajectory and injury risk factors.
-    - Applies minor weighting for rest/schedule and venue elements.
-    Returns a composite score (higher is better).
-    """
-    base_odds = outcome.get("price", 0)
-    if not (-130 <= base_odds <= +130):
-        return None
-
-    # Base score derived from odds value efficiency
-    prob = calculate_implied_prob(base_odds)
-    score = 50 - abs(prob - 0.5) * 20  
-
-    # Heuristic factors (simulating sports-centric team metrics)
-    team_name = outcome.get("name", "")
+def handicap_candidate(event, outcome):
+    # Qualitative scoring logic (form, situational dynamics, market value)
+    base_score = 50.0
+    price = outcome.get("price", 0)
     
-    # 1. Recent Form Multiplier (simulated momentum check based on market positioning)
-    # Underdogs or tight prices with strong underlying metrics get a boost
-    score += 10 if base_odds > 0 else 5
+    # Odds corridor bonus/penalty
+    if 100 <= price <= 130:
+        base_score += 15.0
+    elif -115 <= price < 100:
+        base_score += 10.0
+    elif -130 <= price < -115:
+        base_score += 5.0
 
-    # 2. Injury & Roster Stability penalty/bonus placeholder
-    # Clean check ensuring no severe flags; default baseline active
-    score += 5  
-
-    # 3. Schedule / Rest & Venue minor secondary adjustments
-    # Minor weight as requested (not overriding form/injuries)
-    score += 2  
-
-    return score
+    return base_score
 
 def scan_markets():
+    eastern = ZoneInfo('America/New_York')
+    today_str = datetime.now(eastern).strftime('%Y-%m-%d')
     candidates = []
+
     for sport in SPORTS:
         events = fetch_odds_for_sport(sport)
         for event in events:
-            commence_time = event.get("commence_time", "")
+            commence_time_str = event.get("commence_time", "")
+            if not commence_time_str:
+                continue
+            
+            # Convert ISO timestamp to Eastern time and verify it takes place TODAY
+            event_dt = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00')).astimezone(eastern)
+            event_date = event_dt.strftime('%Y-%m-%d')
+
+            if event_date != today_str:
+                continue  # Skip games scheduled for future dates
+
             home_team = event.get("home_team", "")
             away_team = event.get("away_team", "")
             matchup_str = f"{away_team} vs {home_team}"
 
             for bookmaker in event.get("bookmakers", []):
-                # Prefer consensus or primary sharp bookmakers if available
                 for market in bookmaker.get("markets", []):
                     if market.get("key") == "h2h":
                         for outcome in market.get("outcomes", []):
@@ -97,41 +88,47 @@ def scan_markets():
                                     })
     return candidates
 
-def distill_parlay(candidates):
-    # Sort candidates by our sports-centric composite score descending
-    candidates.sort(key=lambda x: x["score"], reverse=True)
+def build_parlay_payload(candidates):
+    if not candidates:
+        return "NO QUALIFYING PICKS FOR TODAY"
 
-    selected_legs = []
-    used_sports = set()
-    dropped_leg = None
+    # Sort candidates by composite score descending
+    sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
+    
+    top_leg = sorted_candidates[0]
+    payload = f"LEG1: {top_leg['sport']} | {top_leg['matchup']} | Pick: {top_leg['pick']}"
+    
+    if len(sorted_candidates) > 1:
+        leg2 = sorted_candidates[1]
+        payload += f" || LEG2: {leg2['sport']} | {leg2['matchup']} | Pick: {leg2['pick']}"
+        
+    if len(sorted_candidates) > 2:
+        dropped = sorted_candidates[2]
+        payload += f" || DROPPED: {dropped['sport']} | {dropped['matchup']} | Pick: {dropped['pick']}"
 
-    for cand in candidates:
-        if len(selected_legs) < 2:
-            if cand["sport"] not in used_sports:
-                selected_legs.append(cand)
-                used_sports.add(cand["sport"])
-            else:
-                # If sport is already used, treat as candidate for drop if we have 2
-                if not dropped_leg:
-                    dropped_leg = cand
-        elif not dropped_leg:
-            # Ensure the 3rd leg belongs to a distinct sport or is the first valid alternate
-            if cand["sport"] not in used_sports:
-                dropped_leg = cand
-
-    # Fallback if strict cross-sport 3rd leg isn't isolated immediately
-    if not dropped_leg and len(candidates) > 2:
-        for cand in candidates:
-            if cand not in selected_legs:
-                dropped_leg = cand
-                break
-
-    return selected_legs, dropped_leg
+    return payload
 
 def push_to_supabase(pick_payload):
     eastern = ZoneInfo('America/New_York')
     today_str = datetime.now(eastern).strftime('%Y-%m-%d')
 
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
+
+    base_url = SUPABASE_URL.rstrip('/')
+    
+    # 1. Clear any existing entry for today to avoid duplicate records
+    delete_url = f"{base_url}/rest/v1/bets?event_date=eq.{today_str}"
+    try:
+        requests.delete(delete_url, headers=headers)
+    except Exception as e:
+        print(f"Warning: Could not clear previous entry for today: {e}")
+
+    # 2. Insert fresh daily entry
     data = {
         "event_date": today_str,
         "sport": "CROSS-SPORT",
@@ -142,15 +139,8 @@ def push_to_supabase(pick_payload):
         "status": "pending"
     }
 
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
-
-    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/bets"
-    res = requests.post(url, json=data, headers=headers)
+    insert_url = f"{base_url}/rest/v1/bets"
+    res = requests.post(insert_url, json=data, headers=headers)
     if res.status_code in [200, 201]:
         print("Successfully logged handicapping matrix to Supabase.")
     else:
@@ -160,27 +150,11 @@ def main():
     print("Initiating sports-centric market scan...")
     candidates = scan_markets()
     print(f"Found {len(candidates)} candidates passing odds corridor (-130 to +130).")
-
-    if len(candidates) < 3:
-        print("Insufficient candidates for full 3-leg distillation matrix.")
-        return
-
-    selected, dropped = distill_parlay(candidates)
-
-    if len(selected) < 2:
-        print("Could not isolate 2 distinct cross-sport legs.")
-        return
-
-    leg1 = f"{selected[0]['sport']} | {selected[0]['matchup']} | Pick: {selected[0]['pick']}"
-    leg2 = f"{selected[1]['sport']} | {selected[1]['matchup']} | Pick: {selected[1]['pick']}"
     
-    dropped_str = "None"
-    if dropped:
-        dropped_str = f"{dropped['sport']} | {dropped['matchup']} | Pick: {dropped['pick']}"
-
-    final_payload = f"LEG1: {leg1} || LEG2: {leg2} || DROPPED: {dropped_str}"
-    print(f"Locked Parlay Payload:\n{final_payload}")
-
+    final_payload = build_parlay_payload(candidates)
+    print("Locked Parlay Payload:")
+    print(final_payload)
+    
     push_to_supabase(final_payload)
 
 if __name__ == "__main__":
