@@ -1,7 +1,6 @@
 import os
 import requests
 from datetime import datetime
-import pytz
 
 # Environment variables configured in GitHub Actions
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
