@@ -7,10 +7,29 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
+# Extended dictionary to normalize any sport string format coming from Supabase
 SPORTS_KEYS = {
+    # NBA
     "BASKETBALL NBA": "basketball_nba",
+    "BASKETBALL_NBA": "basketball_nba",
+    "NBA": "basketball_nba",
+
+    # NHL
     "ICEHOCKEY NHL": "icehockey_nhl",
-    "AMERICANFOOTBALL NFL": "americanfootball_nfl"
+    "ICE_HOCKEY_NHL": "icehockey_nhl",
+    "ICEHOCKEY_NHL": "icehockey_nhl",
+    "NHL": "icehockey_nhl",
+
+    # NFL
+    "AMERICANFOOTBALL NFL": "americanfootball_nfl",
+    "AMERICAN_FOOTBALL_NFL": "americanfootball_nfl",
+    "AMERICANFOOTBALL_NFL": "americanfootball_nfl",
+    "NFL": "americanfootball_nfl",
+
+    # NCAAF
+    "AMERICANFOOTBALL NCAAF": "americanfootball_ncaaf",
+    "AMERICANFOOTBALL_NCAAF": "americanfootball_ncaaf",
+    "NCAAF": "americanfootball_ncaaf"
 }
 
 def get_supabase_endpoint():
@@ -84,10 +103,12 @@ def parse_parlay(pick_payload):
     return legs
 
 def evaluate_leg_outcome(leg, scores_by_sport):
-    sport_key = SPORTS_KEYS.get(leg["sport"])
+    raw_sport = leg["sport"].upper().replace("_", " ").strip()
+    sport_key = SPORTS_KEYS.get(raw_sport) or SPORTS_KEYS.get(leg["sport"].upper().strip())
+    
     if not sport_key:
         print(f"DEBUG: Unknown sport key for '{leg['sport']}'")
-        return None  # Unknown sport
+        return None
 
     scores = scores_by_sport.get(sport_key, [])
     picked_team = leg["team"].lower()
@@ -97,13 +118,12 @@ def evaluate_leg_outcome(leg, scores_by_sport):
         away_team = game.get("away_team", "")
         completed = game.get("completed", False)
 
-        # Debug print all games checked
+        if picked_team not in [home_team.lower(), away_team.lower()]:
+            continue
+
         print(f"DEBUG: Checking game [{away_team} @ {home_team}] | Completed: {completed} | Looking for pick: {leg['team']}")
 
         if not completed:
-            continue
-
-        if picked_team not in [home_team.lower(), away_team.lower()]:
             continue
 
         game_scores = game.get("scores", [])
@@ -128,7 +148,7 @@ def evaluate_leg_outcome(leg, scores_by_sport):
         is_win = winning_team.lower() == picked_team
         return "win" if is_win else "loss"
 
-    return None  # Game not yet completed or name mismatch
+    return None
 
 def update_bet_status(bet_id, new_status):
     endpoint = get_supabase_endpoint()
@@ -157,9 +177,10 @@ def main():
     if not pending_bets:
         return
 
-    # Cache scores for involved sports
+    # Cache scores for all mapped sports
     scores_by_sport = {}
-    for sport_key in SPORTS_KEYS.values():
+    unique_sport_keys = set(SPORTS_KEYS.values())
+    for sport_key in unique_sport_keys:
         scores_by_sport[sport_key] = fetch_completed_scores(sport_key)
 
     for bet in pending_bets:
@@ -178,12 +199,15 @@ def main():
 
         print(f"DEBUG: Bet #{bet_id} leg results evaluation: {leg_results}")
 
-        if None in leg_results:
-            print(f"Bet #{bet_id}: Games still pending or scores not finalized yet.")
-            continue
-
+        # Correct Parlay Decision Logic:
+        # 1. Any leg loses -> Parlay is LOST immediately (even if other leg is pending)
+        # 2. Any leg pending/None (and no losses) -> Parlay remains PENDING
+        # 3. All legs won -> Parlay is WON
+        # 4. Any leg push (with remaining wins) -> Parlay is PUSH
         if "loss" in leg_results:
             final_status = "loss"
+        elif None in leg_results:
+            final_status = "pending"
         elif "push" in leg_results:
             final_status = "push"
         elif all(r == "win" for r in leg_results):
@@ -194,6 +218,8 @@ def main():
         if final_status != "pending":
             print(f"Grading Bet #{bet_id} -> Result: {final_status.upper()}")
             update_bet_status(bet_id, final_status)
+        else:
+            print(f"Bet #{bet_id}: Remains pending (waiting on incomplete games).")
 
 if __name__ == "__main__":
     main()
