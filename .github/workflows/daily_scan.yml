@@ -3,7 +3,7 @@ name: Fatty Rodriguez Daily Scan
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 21 * * *'
+    - cron: '30 16 * * *'
 
 jobs:
   run-fatty-script:
