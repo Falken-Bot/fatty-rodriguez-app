@@ -95,13 +95,15 @@ def build_parlay_payload(candidates):
     # Sort candidates by score descending
     sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
     
-    # Deduplicate candidates so each leg represents a unique game matchup
+    # Deduplicate candidates so each leg represents both a unique matchup AND a unique sport
     unique_candidates = []
     seen_matchups = set()
+    seen_sports = set()
     
     for cand in sorted_candidates:
-        if cand["matchup"] not in seen_matchups:
+        if cand["matchup"] not in seen_matchups and cand["sport"] not in seen_sports:
             seen_matchups.add(cand["matchup"])
+            seen_sports.add(cand["sport"])
             unique_candidates.append(cand)
 
     top_leg = unique_candidates[0]
