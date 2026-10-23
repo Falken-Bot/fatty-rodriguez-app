@@ -65,7 +65,7 @@ def fetch_completed_scores(sport_key):
         res = requests.get(url, params=params)
         if res.status_code == 200:
             data = res.json()
-            print(f"DEBUG: Fetched {len(data)} games for {sport_key}")
+            print(f"DEBUG: Fetched {len(data)} total games for {sport_key}")
             return data
         print(f"Error fetching scores for {sport_key} ({res.status_code}): {res.text}")
         return []
@@ -83,30 +83,18 @@ def parse_leg(leg_str):
     matchup_raw = parts[1]
     pick_raw = parts[2]
     
-    # Example pick_raw inputs:
-    # "New England Patriots (+9.5)"
-    # "Chicago Blackhawks (-110)" -> Moneyline
-    # "Over 210.5 (-110)"
-    
-    # 1. Extract odds/handicap values inside parentheses
     spread_value = 0.0
     match = re.search(r'\(([^)]+)\)', pick_raw)
-    
     clean_pick_name = re.sub(r'\([^)]*\)', '', pick_raw).replace("Pick:", "").strip()
 
     if match:
         val_str = match.group(1).strip()
-        # If input has market odds like +100 or -110 but also a spread point, parse numeric spread point
-        # e.g., "Patriots +9.5 (+100)" vs "Patriots (+9.5)"
         spread_matches = re.findall(r'([+-]?\d+\.?\d*)', val_str)
         if spread_matches:
-            # Check if there is a spread modifier inside or prior to odds
             num = float(spread_matches[0])
-            # Exclude standard American moneyline odds (-110, +150) if no point spread is explicitly designated
             if abs(num) < 50.0 or '.' in spread_matches[0]:
                 spread_value = num
 
-    # Also check if spread point is directly in team name, e.g. "New England Patriots +9.5"
     point_match = re.search(r'([+-]\d+\.?\d*)$', clean_pick_name)
     if point_match:
         spread_value = float(point_match.group(1))
@@ -130,7 +118,7 @@ def parse_parlay(pick_payload):
                 legs.append(parsed)
     return legs
 
-def evaluate_leg_outcome(leg, scores_by_sport):
+def evaluate_leg_outcome(leg, event_date_str, scores_by_sport):
     raw_sport = leg["sport"].upper().replace("_", " ").strip()
     sport_key = SPORTS_KEYS.get(raw_sport) or SPORTS_KEYS.get(leg["sport"].upper().strip())
     
@@ -141,19 +129,32 @@ def evaluate_leg_outcome(leg, scores_by_sport):
     scores = scores_by_sport.get(sport_key, [])
     picked_team = leg["team"].lower()
     spread = leg["spread"]
+    eastern = ZoneInfo('America/New_York')
 
     for game in scores:
         home_team = game.get("home_team", "")
         away_team = game.get("away_team", "")
         completed = game.get("completed", False)
+        commence_str = game.get("commence_time", "")
 
         if picked_team not in [home_team.lower(), away_team.lower()]:
             continue
 
-        print(f"DEBUG: Checking game [{away_team} @ {home_team}] | Completed: {completed} | Pick: {leg['team']} | Spread Point: {spread:+g}")
+        # Convert game start time to ET date string to ensure it matches bet's event_date
+        game_date_et = ""
+        if commence_str:
+            game_dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00')).astimezone(eastern)
+            game_date_et = game_dt.strftime('%Y-%m-%d')
+
+        # Strictly match game date to event_date to prevent hitting old historical games
+        if game_date_et and game_date_et != event_date_str:
+            print(f"DEBUG: Skipping historical/future game [{away_team} @ {home_team}] on {game_date_et} (Bet Date: {event_date_str})")
+            continue
+
+        print(f"DEBUG: Checking game [{away_team} @ {home_team}] on {game_date_et} | Completed: {completed} | Pick: {leg['team']} ({spread:+g})")
 
         if not completed:
-            continue
+            return None
 
         game_scores = game.get("scores", [])
         if not game_scores or len(game_scores) < 2:
@@ -168,7 +169,6 @@ def evaluate_leg_outcome(leg, scores_by_sport):
             elif s.get("name", "").lower() == away_team.lower():
                 away_score = float(s.get("score", 0))
 
-        # Determine scores with spread applied
         if picked_team == home_team.lower():
             adjusted_picked_score = home_score + spread
             opponent_score = away_score
@@ -207,9 +207,12 @@ def update_bet_status(bet_id, new_status):
         print(f"Exception updating Bet #{bet_id}: {e}")
 
 def main():
-    print("Initiating automated bet grading sweep...")
+    eastern = ZoneInfo('America/New_York')
+    today_str = datetime.now(eastern).strftime('%Y-%m-%d')
+    print(f"Initiating automated bet grading sweep... Today's ET Date: {today_str}")
+    
     pending_bets = get_pending_bets()
-    print(f"Found {len(pending_bets)} pending bet record(s) to grade.")
+    print(f"Found {len(pending_bets)} pending bet record(s) in Supabase.")
 
     if not pending_bets:
         return
@@ -222,7 +225,13 @@ def main():
 
     for bet in pending_bets:
         bet_id = bet.get("id")
+        event_date_str = bet.get("event_date", "")
         pick_payload = bet.get("pick", "")
+
+        # Skip today's picks completely—they have not finished yet
+        if event_date_str == today_str:
+            print(f"Bet #{bet_id}: Event date is TODAY ({today_str}). Skipping grading until games finish.")
+            continue
 
         legs = parse_parlay(pick_payload)
         if not legs:
@@ -231,10 +240,10 @@ def main():
 
         leg_results = []
         for leg in legs:
-            res = evaluate_leg_outcome(leg, scores_by_sport)
+            res = evaluate_leg_outcome(leg, event_date_str, scores_by_sport)
             leg_results.append(res)
 
-        print(f"DEBUG: Bet #{bet_id} leg results evaluation: {leg_results}")
+        print(f"DEBUG: Bet #{bet_id} ({event_date_str}) leg results evaluation: {leg_results}")
 
         if "loss" in leg_results:
             final_status = "loss"
