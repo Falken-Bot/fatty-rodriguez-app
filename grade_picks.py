@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -7,7 +8,6 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
-# Extended dictionary to normalize any sport string format coming from Supabase
 SPORTS_KEYS = {
     # NBA
     "BASKETBALL NBA": "basketball_nba",
@@ -83,12 +83,40 @@ def parse_leg(leg_str):
     matchup_raw = parts[1]
     pick_raw = parts[2]
     
-    team_pick = pick_raw.split('(')[0].replace("Pick:", "").strip()
+    # Example pick_raw inputs:
+    # "New England Patriots (+9.5)"
+    # "Chicago Blackhawks (-110)" -> Moneyline
+    # "Over 210.5 (-110)"
     
+    # 1. Extract odds/handicap values inside parentheses
+    spread_value = 0.0
+    match = re.search(r'\(([^)]+)\)', pick_raw)
+    
+    clean_pick_name = re.sub(r'\([^)]*\)', '', pick_raw).replace("Pick:", "").strip()
+
+    if match:
+        val_str = match.group(1).strip()
+        # If input has market odds like +100 or -110 but also a spread point, parse numeric spread point
+        # e.g., "Patriots +9.5 (+100)" vs "Patriots (+9.5)"
+        spread_matches = re.findall(r'([+-]?\d+\.?\d*)', val_str)
+        if spread_matches:
+            # Check if there is a spread modifier inside or prior to odds
+            num = float(spread_matches[0])
+            # Exclude standard American moneyline odds (-110, +150) if no point spread is explicitly designated
+            if abs(num) < 50.0 or '.' in spread_matches[0]:
+                spread_value = num
+
+    # Also check if spread point is directly in team name, e.g. "New England Patriots +9.5"
+    point_match = re.search(r'([+-]\d+\.?\d*)$', clean_pick_name)
+    if point_match:
+        spread_value = float(point_match.group(1))
+        clean_pick_name = clean_pick_name[:point_match.start()].strip()
+
     return {
         "sport": sport_raw,
         "matchup": matchup_raw,
-        "team": team_pick
+        "team": clean_pick_name,
+        "spread": spread_value
     }
 
 def parse_parlay(pick_payload):
@@ -112,6 +140,7 @@ def evaluate_leg_outcome(leg, scores_by_sport):
 
     scores = scores_by_sport.get(sport_key, [])
     picked_team = leg["team"].lower()
+    spread = leg["spread"]
 
     for game in scores:
         home_team = game.get("home_team", "")
@@ -121,7 +150,7 @@ def evaluate_leg_outcome(leg, scores_by_sport):
         if picked_team not in [home_team.lower(), away_team.lower()]:
             continue
 
-        print(f"DEBUG: Checking game [{away_team} @ {home_team}] | Completed: {completed} | Looking for pick: {leg['team']}")
+        print(f"DEBUG: Checking game [{away_team} @ {home_team}] | Completed: {completed} | Pick: {leg['team']} | Spread Point: {spread:+g}")
 
         if not completed:
             continue
@@ -135,18 +164,26 @@ def evaluate_leg_outcome(leg, scores_by_sport):
         away_score = 0
         for s in game_scores:
             if s.get("name", "").lower() == home_team.lower():
-                home_score = int(s.get("score", 0))
+                home_score = float(s.get("score", 0))
             elif s.get("name", "").lower() == away_team.lower():
-                away_score = int(s.get("score", 0))
+                away_score = float(s.get("score", 0))
 
-        print(f"DEBUG: Final Score - {away_team}: {away_score} vs {home_team}: {home_score}")
+        # Determine scores with spread applied
+        if picked_team == home_team.lower():
+            adjusted_picked_score = home_score + spread
+            opponent_score = away_score
+        else:
+            adjusted_picked_score = away_score + spread
+            opponent_score = home_score
 
-        if home_score == away_score:
+        print(f"DEBUG: Score Matrix - Raw: [{away_team} {away_score} @ {home_team} {home_score}] | Adjusted Pick Score: {adjusted_picked_score} vs Opponent: {opponent_score}")
+
+        if adjusted_picked_score > opponent_score:
+            return "win"
+        elif adjusted_picked_score < opponent_score:
+            return "loss"
+        else:
             return "push"
-
-        winning_team = home_team if home_score > away_score else away_team
-        is_win = winning_team.lower() == picked_team
-        return "win" if is_win else "loss"
 
     return None
 
@@ -199,11 +236,6 @@ def main():
 
         print(f"DEBUG: Bet #{bet_id} leg results evaluation: {leg_results}")
 
-        # Correct Parlay Decision Logic:
-        # 1. Any leg loses -> Parlay is LOST immediately (even if other leg is pending)
-        # 2. Any leg pending/None (and no losses) -> Parlay remains PENDING
-        # 3. All legs won -> Parlay is WON
-        # 4. Any leg push (with remaining wins) -> Parlay is PUSH
         if "loss" in leg_results:
             final_status = "loss"
         elif None in leg_results:
