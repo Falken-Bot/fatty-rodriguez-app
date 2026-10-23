@@ -538,6 +538,10 @@
 
             try {
                 const bets = await fetchAllBets();
+                
+                // Debugging: check what records and status values are coming from Supabase
+                console.log("Fetched bets from Supabase:", bets);
+
                 if (bets.length > 0) {
                     currentLatestId = bets[0].id;
                     const latest = bets[0];
@@ -548,7 +552,7 @@
                     let pushes = 0;
 
                     bets.forEach(b => {
-                        const st = (b.status || '').toLowerCase();
+                        const st = (b.status || '').toLowerCase().trim();
                         if (st === 'win' || st === 'won') wins++;
                         else if (st === 'loss' || st === 'lost') losses++;
                         else if (st === 'push') pushes++;
