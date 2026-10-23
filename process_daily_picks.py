@@ -129,7 +129,7 @@ def distill_parlay(candidates):
     return selected_legs, dropped_leg
 
 def push_to_supabase(pick_payload):
-    eastern = pytz.timezone('America/New_York')
+    eastern = ZoneInfo('America/New_York')
     today_str = datetime.now(eastern).strftime('%Y-%m-%d')
 
     data = {
