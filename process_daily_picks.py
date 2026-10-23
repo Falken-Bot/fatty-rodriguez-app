@@ -4,9 +4,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 # Environment variables configured in GitHub Actions
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
 SPORTS = [
     "icehockey_nhl",
@@ -92,18 +92,27 @@ def build_parlay_payload(candidates):
     if not candidates:
         return "NO QUALIFYING PICKS FOR TODAY"
 
-    # Sort candidates by composite score descending
+    # Sort candidates by score descending
     sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
     
-    top_leg = sorted_candidates[0]
+    # Deduplicate candidates so each leg represents a unique game matchup
+    unique_candidates = []
+    seen_matchups = set()
+    
+    for cand in sorted_candidates:
+        if cand["matchup"] not in seen_matchups:
+            seen_matchups.add(cand["matchup"])
+            unique_candidates.append(cand)
+
+    top_leg = unique_candidates[0]
     payload = f"LEG1: {top_leg['sport']} | {top_leg['matchup']} | Pick: {top_leg['pick']}"
     
-    if len(sorted_candidates) > 1:
-        leg2 = sorted_candidates[1]
+    if len(unique_candidates) > 1:
+        leg2 = unique_candidates[1]
         payload += f" || LEG2: {leg2['sport']} | {leg2['matchup']} | Pick: {leg2['pick']}"
         
-    if len(sorted_candidates) > 2:
-        dropped = sorted_candidates[2]
+    if len(unique_candidates) > 2:
+        dropped = unique_candidates[2]
         payload += f" || DROPPED: {dropped['sport']} | {dropped['matchup']} | Pick: {dropped['pick']}"
 
     return payload
@@ -119,10 +128,15 @@ def push_to_supabase(pick_payload):
         "Prefer": "return=minimal"
     }
 
-    base_url = SUPABASE_URL.rstrip('/')
-    
-    # 1. Clear any existing entry for today to avoid duplicate records
-    delete_url = f"{base_url}/rest/v1/bets?event_date=eq.{today_str}"
+    # Normalize Supabase base URL (handles with or without trailing slash/path)
+    clean_url = SUPABASE_URL.rstrip('/')
+    if clean_url.endswith('/rest/v1'):
+        base_endpoint = clean_url
+    else:
+        base_endpoint = f"{clean_url}/rest/v1"
+
+    # 1. Clear any existing entry for today
+    delete_url = f"{base_endpoint}/bets?event_date=eq.{today_str}"
     try:
         requests.delete(delete_url, headers=headers)
     except Exception as e:
@@ -139,7 +153,7 @@ def push_to_supabase(pick_payload):
         "status": "pending"
     }
 
-    insert_url = f"{base_url}/rest/v1/bets"
+    insert_url = f"{base_endpoint}/bets"
     res = requests.post(insert_url, json=data, headers=headers)
     if res.status_code in [200, 201]:
         print("Successfully logged handicapping matrix to Supabase.")
