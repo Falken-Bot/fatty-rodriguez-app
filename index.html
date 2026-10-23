@@ -92,6 +92,46 @@
             flex: 1;
         }
 
+        /* FLASHY EXECUTIVE RECORD HERO BANNER */
+        .record-hero-banner {
+            background: linear-gradient(135deg, #181820 0%, #0e0e12 100%);
+            border: 2px solid var(--gold);
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            margin-bottom: 35px;
+            box-shadow: 0 0 35px rgba(255, 215, 0, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .record-hero-label {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: var(--gold);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .record-hero-digits {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--text-main);
+            letter-spacing: -1px;
+            line-height: 1;
+            margin: 10px 0;
+            text-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+        }
+
+        .record-hero-pct {
+            font-size: 18px;
+            font-weight: 800;
+            color: #34D399;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
         .section-title {
             font-size: 18px;
             font-weight: 800;
@@ -334,6 +374,13 @@
     </header>
 
     <div class="main-container">
+        <!-- FLASHY EXECUTIVE RECORD HERO -->
+        <div class="record-hero-banner">
+            <div class="record-hero-label">Executive System Win / Loss Record</div>
+            <div id="hero-record-digits" class="record-hero-digits">0 - 0</div>
+            <div id="hero-record-pct" class="record-hero-pct">WIN RATE: 0.0%</div>
+        </div>
+
         <div class="section-title">
             <span>Today's Locked 2-Leg Parlay</span>
             <span id="current-date-display"></span>
@@ -468,7 +515,7 @@
         }
 
         async function fetchAllBets() {
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=15`;
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=25`;
             let response = await fetch(url, {
                 cache: 'no-store',
                 headers: {
@@ -495,6 +542,24 @@
                     currentLatestId = bets[0].id;
                     const latest = bets[0];
                     
+                    // Calculate overall W-L Record across all retrieved records
+                    let wins = 0;
+                    let losses = 0;
+                    let pushes = 0;
+
+                    bets.forEach(b => {
+                        const st = (b.status || '').toLowerCase();
+                        if (st === 'win' || st === 'won') wins++;
+                        else if (st === 'loss' || st === 'lost') losses++;
+                        else if (st === 'push') pushes++;
+                    });
+
+                    const totalDecided = wins + losses;
+                    const winPct = totalDecided > 0 ? ((wins / totalDecided) * 100).toFixed(1) + '%' : '0.0%';
+
+                    document.getElementById('hero-record-digits').innerText = `${wins} - ${losses}${pushes > 0 ? ` (${pushes}P)` : ''}`;
+                    document.getElementById('hero-record-pct').innerText = `WIN RATE: ${winPct}`;
+
                     const latestParsed = parsePickString(latest.pick);
                     const wagerAmount = Number(latest.wager_amount || 2).toFixed(2);
                     const eventDate = latest.event_date || 'Today';
