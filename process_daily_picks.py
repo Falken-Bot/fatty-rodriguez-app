@@ -28,6 +28,23 @@ def american_to_decimal(odds):
     else:
         return (100 / abs(odds)) + 1
 
+def decimal_to_american(dec):
+    if dec >= 2.0:
+        return round((dec - 1) * 100)
+    else:
+        return round(-100 / (dec - 1))
+
+def get_consensus_american_odds(odds_list):
+    """
+    Correctly averages American odds by converting to decimal, 
+    averaging the probabilities/payout multipliers, and converting back.
+    """
+    if not odds_list:
+        return -110
+    decimals = [american_to_decimal(o) for o in odds_list]
+    avg_dec = sum(decimals) / len(decimals)
+    return decimal_to_american(avg_dec)
+
 def calculate_combined_american_odds(odds1_str, odds2_str):
     def parse_odds(o_str):
         clean = o_str.replace('+', '')
@@ -40,12 +57,8 @@ def calculate_combined_american_odds(odds1_str, odds2_str):
     dec2 = american_to_decimal(o2)
     combined_dec = dec1 * dec2
     
-    if combined_dec >= 2.0:
-        comb = round((combined_dec - 1) * 100)
-        return f"+{comb}"
-    else:
-        comb = round(-100 / (combined_dec - 1))
-        return f"{comb}"
+    comb_american = decimal_to_american(combined_dec)
+    return f"+{comb_american}" if comb_american > 0 else f"{comb_american}"
 
 def get_supabase_endpoint():
     clean_url = SUPABASE_URL.rstrip('/')
@@ -117,8 +130,9 @@ def extract_even_money_candidates(games, sport_key):
         if not home_odds_list or not away_odds_list:
             continue
 
-        avg_home_odds = sum(home_odds_list) / len(home_odds_list)
-        avg_away_odds = sum(away_odds_list) / len(away_odds_list)
+        # Use mathematically sound consensus conversion
+        avg_home_odds = get_consensus_american_odds(home_odds_list)
+        avg_away_odds = get_consensus_american_odds(away_odds_list)
 
         # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= avg_home_odds <= 130) or not (-130 <= avg_away_odds <= 130):
@@ -134,8 +148,8 @@ def extract_even_money_candidates(games, sport_key):
             "matchup": f"{away_team} @ {home_team}",
             "home_team": home_team,
             "away_team": away_team,
-            "home_odds": round(avg_home_odds),
-            "away_odds": round(avg_away_odds),
+            "home_odds": avg_home_odds,
+            "away_odds": avg_away_odds,
             "even_distance": matchup_even_distance
         })
 
@@ -245,15 +259,12 @@ def main():
         print("No active matchups found within the strict even-money corridor (-130 to +130).")
         return
 
-    # Step 1: Sort by closest to true even money (+100)
     all_candidates.sort(key=lambda x: x["even_distance"])
     print(f"Extracted {len(all_candidates)} strict even-money matchup(s). Running head-to-head metric engine...")
 
-    # Step 2: Run head-to-head metrics on near-even games to select side
     evaluated_candidates = [run_head_to_head_metrics(c) for c in all_candidates]
     evaluated_candidates.sort(key=lambda x: x["metric_score"], reverse=True)
 
-    # Step 3: Enforce Cross-Sport Decoupling
     leg1 = evaluated_candidates[0]
     leg2 = None
     dropped_leg = None
