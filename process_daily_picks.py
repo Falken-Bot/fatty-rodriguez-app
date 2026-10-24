@@ -120,9 +120,12 @@ def extract_even_money_candidates(games, sport_key):
         avg_home_odds = sum(home_odds_list) / len(home_odds_list)
         avg_away_odds = sum(away_odds_list) / len(away_odds_list)
 
+        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
+        if not (-130 <= avg_home_odds <= 130) or not (-130 <= avg_away_odds <= 130):
+            continue
+
         dist_home = abs(avg_home_odds - 100) if avg_home_odds > 0 else abs(abs(avg_home_odds) - 100)
         dist_away = abs(avg_away_odds - 100) if avg_away_odds > 0 else abs(abs(avg_away_odds) - 100)
-
         matchup_even_distance = (dist_home + dist_away) / 2.0
 
         candidates.append({
@@ -227,7 +230,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Even-Money Market Scan...")
+    print("Initiating Strict Even-Money Market Scan...")
     all_candidates = []
 
     for sport in ACTIVE_SPORTS:
@@ -239,15 +242,18 @@ def main():
         all_candidates.extend(candidates)
 
     if not all_candidates:
-        print("No active even-money matchups found for today.")
+        print("No active matchups found within the strict even-money corridor (-130 to +130).")
         return
 
+    # Step 1: Sort by closest to true even money (+100)
     all_candidates.sort(key=lambda x: x["even_distance"])
-    print(f"Extracted {len(all_candidates)} near even-money matchup(s). Running head-to-head metric engine...")
+    print(f"Extracted {len(all_candidates)} strict even-money matchup(s). Running head-to-head metric engine...")
 
+    # Step 2: Run head-to-head metrics on near-even games to select side
     evaluated_candidates = [run_head_to_head_metrics(c) for c in all_candidates]
     evaluated_candidates.sort(key=lambda x: x["metric_score"], reverse=True)
 
+    # Step 3: Enforce Cross-Sport Decoupling
     leg1 = evaluated_candidates[0]
     leg2 = None
     dropped_leg = None
@@ -262,10 +268,10 @@ def main():
             break
 
     if not leg2:
-        print("Could not find two unique cross-sport legs among candidates.")
+        print("Could not find two unique cross-sport legs among even-money candidates.")
         return
 
-    print("\n--- TODAY'S EVEN-MONEY LOCKED PARLAY ---")
+    print("\n--- TODAY'S STRICT EVEN-MONEY LOCKED PARLAY ---")
     print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
     print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
     if dropped_leg:
