@@ -82,7 +82,6 @@ def extract_even_money_candidates(games, sport_key):
         if not bookmakers:
             continue
 
-        # Aggregate odds across available bookmakers
         home_odds_list = []
         away_odds_list = []
 
@@ -100,15 +99,12 @@ def extract_even_money_candidates(games, sport_key):
         if not home_odds_list or not away_odds_list:
             continue
 
-        # Use consensus consensus average price
         avg_home_odds = sum(home_odds_list) / len(home_odds_list)
         avg_away_odds = sum(away_odds_list) / len(away_odds_list)
 
-        # Measure distance to true even money (+100)
         dist_home = abs(avg_home_odds - 100) if avg_home_odds > 0 else abs(abs(avg_home_odds) - 100)
         dist_away = abs(avg_away_odds - 100) if avg_away_odds > 0 else abs(abs(avg_away_odds) - 100)
 
-        # Distance metric for matchup closeness (lower = closer to 50/50 pick'em)
         matchup_even_distance = (dist_home + dist_away) / 2.0
 
         candidates.append({
@@ -125,10 +121,6 @@ def extract_even_money_candidates(games, sport_key):
     return candidates
 
 def run_head_to_head_metrics(candidate):
-    """
-    Pits Team A against Team B in a near even-money matchup to determine
-    which side possesses the quantitative edge.
-    """
     home_team = candidate["home_team"]
     away_team = candidate["away_team"]
     h_odds = candidate["home_odds"]
@@ -137,17 +129,16 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
-    # Metric 1: Home Field / Home Ice Baseline Advantage
+    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
-    # Metric 2: Price Line Leverage & Market Value
-    # Reward the side sitting at true pick'em or slight favorable vig
+    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
-    # Metric 3: Implied Probability Edge
+    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -158,7 +149,6 @@ def run_head_to_head_metrics(candidate):
     else:
         away_score += (a_prob - h_prob)
 
-    # Determine winning side of the head-to-head metric audit
     if home_score >= away_score:
         selected_team = home_team
         selected_odds = f"+{h_odds}" if h_odds > 0 else str(h_odds)
@@ -187,6 +177,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         l3_str = "DROPPED: No third cross-sport candidate available"
 
     full_pick_payload = f"{l1_str} || {l2_str} || {l3_str}"
+    combined_sport_label = f"{leg1['sport_name']} / {leg2['sport_name']}"
 
     endpoint = get_supabase_endpoint()
     url = f"{endpoint}/bets"
@@ -198,6 +189,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     }
     data = {
         "event_date": event_date,
+        "sport": combined_sport_label,
         "pick": full_pick_payload,
         "wager_amount": 2.00,
         "status": "pending"
@@ -228,18 +220,12 @@ def main():
         print("No active even-money matchups found for today.")
         return
 
-    # Step 1: Sort all games strictly by how close the matchup is to true even money (+100)
     all_candidates.sort(key=lambda x: x["even_distance"])
-
     print(f"Extracted {len(all_candidates)} near even-money matchup(s). Running head-to-head metric engine...")
 
-    # Step 2: Run head-to-head metrics on each even-money matchup to pick the side
     evaluated_candidates = [run_head_to_head_metrics(c) for c in all_candidates]
-
-    # Step 3: Sort by highest metric edge score
     evaluated_candidates.sort(key=lambda x: x["metric_score"], reverse=True)
 
-    # Step 4: Enforce Cross-Sport Decoupling (Leg 1 and Leg 2 must be different sports)
     leg1 = evaluated_candidates[0]
     leg2 = None
     dropped_leg = None
