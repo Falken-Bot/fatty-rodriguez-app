@@ -28,6 +28,25 @@ def american_to_decimal(odds):
     else:
         return (100 / abs(odds)) + 1
 
+def calculate_combined_american_odds(odds1_str, odds2_str):
+    def parse_odds(o_str):
+        clean = o_str.replace('+', '')
+        return int(clean)
+    
+    o1 = parse_odds(odds1_str)
+    o2 = parse_odds(odds2_str)
+    
+    dec1 = american_to_decimal(o1)
+    dec2 = american_to_decimal(o2)
+    combined_dec = dec1 * dec2
+    
+    if combined_dec >= 2.0:
+        comb = round((combined_dec - 1) * 100)
+        return f"+{comb}"
+    else:
+        comb = round(-100 / (combined_dec - 1))
+        return f"{comb}"
+
 def get_supabase_endpoint():
     clean_url = SUPABASE_URL.rstrip('/')
     if clean_url.endswith('/rest/v1'):
@@ -62,7 +81,6 @@ def filter_games_for_today(games):
         if not commence_str:
             continue
         
-        # Convert ISO start time to Eastern Time
         dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00')).astimezone(eastern)
         game_date_str = dt.strftime('%Y-%m-%d')
 
@@ -179,6 +197,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     full_pick_payload = f"{l1_str} || {l2_str} || {l3_str}"
     combined_sport_label = f"{leg1['sport_name']} / {leg2['sport_name']}"
     combined_matchup_label = f"{leg1['matchup']} / {leg2['matchup']}"
+    combined_odds_str = calculate_combined_american_odds(leg1['selected_odds'], leg2['selected_odds'])
 
     endpoint = get_supabase_endpoint()
     url = f"{endpoint}/bets"
@@ -192,6 +211,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         "event_date": event_date,
         "sport": combined_sport_label,
         "matchup": combined_matchup_label,
+        "odds": combined_odds_str,
         "pick": full_pick_payload,
         "wager_amount": 2.00,
         "status": "pending"
