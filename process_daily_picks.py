@@ -3,19 +3,39 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# Environment variables configured in GitHub Actions
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
-SPORTS = [
-    "icehockey_nhl",
+# Target sports to scan
+ACTIVE_SPORTS = [
     "basketball_nba",
-    "americanfootball_nfl"
+    "icehockey_nhl",
+    "americanfootball_nfl",
+    "americanfootball_ncaaf"
 ]
 
-def fetch_odds_for_sport(sport):
-    url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
+SPORT_DISPLAY_NAMES = {
+    "basketball_nba": "NBA",
+    "icehockey_nhl": "NHL",
+    "americanfootball_nfl": "NFL",
+    "americanfootball_ncaaf": "NCAAF"
+}
+
+def american_to_decimal(odds):
+    if odds > 0:
+        return (odds / 100) + 1
+    else:
+        return (100 / abs(odds)) + 1
+
+def get_supabase_endpoint():
+    clean_url = SUPABASE_URL.rstrip('/')
+    if clean_url.endswith('/rest/v1'):
+        return clean_url
+    return f"{clean_url}/rest/v1"
+
+def fetch_live_odds(sport_key):
+    url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/"
     params = {
         "apiKey": ODDS_API_KEY,
         "regions": "us",
@@ -26,152 +46,224 @@ def fetch_odds_for_sport(sport):
         res = requests.get(url, params=params)
         if res.status_code == 200:
             return res.json()
-        print(f"Odds API error ({res.status_code}) for {sport}: {res.text}")
+        print(f"Error fetching odds for {sport_key} ({res.status_code}): {res.text}")
         return []
     except Exception as e:
-        print(f"Failed to fetch odds for {sport}: {e}")
+        print(f"Failed to reach Odds API for {sport_key}: {e}")
         return []
 
-def handicap_candidate(event, outcome):
-    # Qualitative scoring logic (form, situational dynamics, market value)
-    base_score = 50.0
-    price = outcome.get("price", 0)
-    
-    # Odds corridor bonus/penalty
-    if 100 <= price <= 130:
-        base_score += 15.0
-    elif -115 <= price < 100:
-        base_score += 10.0
-    elif -130 <= price < -115:
-        base_score += 5.0
-
-    return base_score
-
-def scan_markets():
+def filter_games_for_today(games):
     eastern = ZoneInfo('America/New_York')
     today_str = datetime.now(eastern).strftime('%Y-%m-%d')
+    today_games = []
+
+    for game in games:
+        commence_str = game.get("commence_time")
+        if not commence_str:
+            continue
+        
+        # Convert ISO start time to Eastern Time
+        dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00')).astimezone(eastern)
+        game_date_str = dt.strftime('%Y-%m-%d')
+
+        if game_date_str == today_str:
+            today_games.append(game)
+
+    return today_games
+
+def extract_even_money_candidates(games, sport_key):
     candidates = []
 
-    for sport in SPORTS:
-        events = fetch_odds_for_sport(sport)
-        for event in events:
-            commence_time_str = event.get("commence_time", "")
-            if not commence_time_str:
-                continue
-            
-            # Convert ISO timestamp to Eastern time and verify it takes place TODAY
-            event_dt = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00')).astimezone(eastern)
-            event_date = event_dt.strftime('%Y-%m-%d')
+    for game in games:
+        home_team = game.get("home_team")
+        away_team = game.get("away_team")
+        bookmakers = game.get("bookmakers", [])
 
-            if event_date != today_str:
-                continue  # Skip games scheduled for future dates
+        if not bookmakers:
+            continue
 
-            home_team = event.get("home_team", "")
-            away_team = event.get("away_team", "")
-            matchup_str = f"{away_team} vs {home_team}"
+        # Aggregate odds across available bookmakers
+        home_odds_list = []
+        away_odds_list = []
 
-            for bookmaker in event.get("bookmakers", []):
-                for market in bookmaker.get("markets", []):
-                    if market.get("key") == "h2h":
-                        for outcome in market.get("outcomes", []):
-                            price = outcome.get("price")
-                            team = outcome.get("name")
-                            if price and -130 <= price <= +130:
-                                score = handicap_candidate(event, outcome)
-                                if score is not None:
-                                    candidates.append({
-                                        "sport": sport.replace("_", " ").upper(),
-                                        "matchup": matchup_str,
-                                        "pick": f"{team} ({price:+d})",
-                                        "score": score,
-                                        "odds": price
-                                    })
+        for bm in bookmakers:
+            for m in bm.get("markets", []):
+                if m.get("key") == "h2h":
+                    for outcome in m.get("outcomes", []):
+                        name = outcome.get("name")
+                        price = outcome.get("price")
+                        if name == home_team:
+                            home_odds_list.append(price)
+                        elif name == away_team:
+                            away_odds_list.append(price)
+
+        if not home_odds_list or not away_odds_list:
+            continue
+
+        # Use consensus consensus average price
+        avg_home_odds = sum(home_odds_list) / len(home_odds_list)
+        avg_away_odds = sum(away_odds_list) / len(away_odds_list)
+
+        # Measure distance to true even money (+100)
+        dist_home = abs(avg_home_odds - 100) if avg_home_odds > 0 else abs(abs(avg_home_odds) - 100)
+        dist_away = abs(avg_away_odds - 100) if avg_away_odds > 0 else abs(abs(avg_away_odds) - 100)
+
+        # Distance metric for matchup closeness (lower = closer to 50/50 pick'em)
+        matchup_even_distance = (dist_home + dist_away) / 2.0
+
+        candidates.append({
+            "sport_key": sport_key,
+            "sport_name": SPORT_DISPLAY_NAMES.get(sport_key, sport_key.upper()),
+            "matchup": f"{away_team} @ {home_team}",
+            "home_team": home_team,
+            "away_team": away_team,
+            "home_odds": round(avg_home_odds),
+            "away_odds": round(avg_away_odds),
+            "even_distance": matchup_even_distance
+        })
+
     return candidates
 
-def build_parlay_payload(candidates):
-    if not candidates:
-        return "NO QUALIFYING PICKS FOR TODAY"
+def run_head_to_head_metrics(candidate):
+    """
+    Pits Team A against Team B in a near even-money matchup to determine
+    which side possesses the quantitative edge.
+    """
+    home_team = candidate["home_team"]
+    away_team = candidate["away_team"]
+    h_odds = candidate["home_odds"]
+    a_odds = candidate["away_odds"]
 
-    # Sort candidates by score descending
-    sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
-    
-    # Deduplicate candidates so each leg represents both a unique matchup AND a unique sport
-    unique_candidates = []
-    seen_matchups = set()
-    seen_sports = set()
-    
-    for cand in sorted_candidates:
-        if cand["matchup"] not in seen_matchups and cand["sport"] not in seen_sports:
-            seen_matchups.add(cand["matchup"])
-            seen_sports.add(cand["sport"])
-            unique_candidates.append(cand)
+    home_score = 50.0
+    away_score = 50.0
 
-    top_leg = unique_candidates[0]
-    payload = f"LEG1: {top_leg['sport']} | {top_leg['matchup']} | Pick: {top_leg['pick']}"
-    
-    if len(unique_candidates) > 1:
-        leg2 = unique_candidates[1]
-        payload += f" || LEG2: {leg2['sport']} | {leg2['matchup']} | Pick: {leg2['pick']}"
-        
-    if len(unique_candidates) > 2:
-        dropped = unique_candidates[2]
-        payload += f" || DROPPED: {dropped['sport']} | {dropped['matchup']} | Pick: {dropped['pick']}"
+    # Metric 1: Home Field / Home Ice Baseline Advantage
+    home_score += 3.5
 
-    return payload
+    # Metric 2: Price Line Leverage & Market Value
+    # Reward the side sitting at true pick'em or slight favorable vig
+    if -115 <= h_odds <= 105:
+        home_score += 4.0
+    if -115 <= a_odds <= 105:
+        away_score += 4.0
 
-def push_to_supabase(pick_payload):
+    # Metric 3: Implied Probability Edge
+    h_dec = american_to_decimal(h_odds)
+    a_dec = american_to_decimal(a_odds)
+    h_prob = (1 / h_dec) * 100
+    a_prob = (1 / a_dec) * 100
+
+    if h_prob > a_prob:
+        home_score += (h_prob - a_prob)
+    else:
+        away_score += (a_prob - h_prob)
+
+    # Determine winning side of the head-to-head metric audit
+    if home_score >= away_score:
+        selected_team = home_team
+        selected_odds = f"+{h_odds}" if h_odds > 0 else str(h_odds)
+        winning_score = home_score
+    else:
+        selected_team = away_team
+        selected_odds = f"+{a_odds}" if a_odds > 0 else str(a_odds)
+        winning_score = away_score
+
+    candidate["selected_team"] = selected_team
+    candidate["selected_odds"] = selected_odds
+    candidate["metric_score"] = round(winning_score, 2)
+
+    return candidate
+
+def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     eastern = ZoneInfo('America/New_York')
-    today_str = datetime.now(eastern).strftime('%Y-%m-%d')
+    event_date = datetime.now(eastern).strftime('%Y-%m-%d')
 
+    l1_str = f"LEG1: {leg1['sport_name']} | {leg1['matchup']} | Pick: {leg1['selected_team']} ({leg1['selected_odds']})"
+    l2_str = f"LEG2: {leg2['sport_name']} | {leg2['matchup']} | Pick: {leg2['selected_team']} ({leg2['selected_odds']})"
+    
+    if dropped_leg:
+        l3_str = f"DROPPED: {dropped_leg['sport_name']} | {dropped_leg['matchup']} | Pick: {dropped_leg['selected_team']} ({dropped_leg['selected_odds']})"
+    else:
+        l3_str = "DROPPED: No third cross-sport candidate available"
+
+    full_pick_payload = f"{l1_str} || {l2_str} || {l3_str}"
+
+    endpoint = get_supabase_endpoint()
+    url = f"{endpoint}/bets"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "return=minimal"
     }
-
-    # Normalize Supabase base URL (handles with or without trailing slash/path)
-    clean_url = SUPABASE_URL.rstrip('/')
-    if clean_url.endswith('/rest/v1'):
-        base_endpoint = clean_url
-    else:
-        base_endpoint = f"{clean_url}/rest/v1"
-
-    # 1. Clear any existing entry for today
-    delete_url = f"{base_endpoint}/bets?event_date=eq.{today_str}"
-    try:
-        requests.delete(delete_url, headers=headers)
-    except Exception as e:
-        print(f"Warning: Could not clear previous entry for today: {e}")
-
-    # 2. Insert fresh daily entry
     data = {
-        "event_date": today_str,
-        "sport": "CROSS-SPORT",
-        "matchup": "Executive Daily Matrix",
-        "pick": pick_payload,
-        "odds": 0.0,
+        "event_date": event_date,
+        "pick": full_pick_payload,
         "wager_amount": 2.00,
         "status": "pending"
     }
 
-    insert_url = f"{base_endpoint}/bets"
-    res = requests.post(insert_url, json=data, headers=headers)
-    if res.status_code in [200, 201]:
-        print("Successfully logged handicapping matrix to Supabase.")
-    else:
-        print(f"Supabase logging failed ({res.status_code}): {res.text}")
+    try:
+        res = requests.post(url, json=data, headers=headers)
+        if res.status_code in [200, 201]:
+            print("Successfully saved daily even-money parlay to Supabase.")
+        else:
+            print(f"Failed saving to Supabase ({res.status_code}): {res.text}")
+    except Exception as e:
+        print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating sports-centric market scan...")
-    candidates = scan_markets()
-    print(f"Found {len(candidates)} candidates passing odds corridor (-130 to +130).")
-    
-    final_payload = build_parlay_payload(candidates)
-    print("Locked Parlay Payload:")
-    print(final_payload)
-    
-    push_to_supabase(final_payload)
+    print("Initiating Even-Money Market Scan...")
+    all_candidates = []
+
+    for sport in ACTIVE_SPORTS:
+        raw_games = fetch_live_odds(sport)
+        today_games = filter_games_for_today(raw_games)
+        print(f"Found {len(today_games)} active today game(s) for {sport}")
+
+        candidates = extract_even_money_candidates(today_games, sport)
+        all_candidates.extend(candidates)
+
+    if not all_candidates:
+        print("No active even-money matchups found for today.")
+        return
+
+    # Step 1: Sort all games strictly by how close the matchup is to true even money (+100)
+    all_candidates.sort(key=lambda x: x["even_distance"])
+
+    print(f"Extracted {len(all_candidates)} near even-money matchup(s). Running head-to-head metric engine...")
+
+    # Step 2: Run head-to-head metrics on each even-money matchup to pick the side
+    evaluated_candidates = [run_head_to_head_metrics(c) for c in all_candidates]
+
+    # Step 3: Sort by highest metric edge score
+    evaluated_candidates.sort(key=lambda x: x["metric_score"], reverse=True)
+
+    # Step 4: Enforce Cross-Sport Decoupling (Leg 1 and Leg 2 must be different sports)
+    leg1 = evaluated_candidates[0]
+    leg2 = None
+    dropped_leg = None
+
+    for candidate in evaluated_candidates[1:]:
+        if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
+            leg2 = candidate
+        elif dropped_leg is None:
+            dropped_leg = candidate
+
+        if leg2 is not None and dropped_leg is not None:
+            break
+
+    if not leg2:
+        print("Could not find two unique cross-sport legs among candidates.")
+        return
+
+    print("\n--- TODAY'S EVEN-MONEY LOCKED PARLAY ---")
+    print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
+    print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
+    if dropped_leg:
+        print(f"Distilled Leg 3: {dropped_leg['sport_name']} - {dropped_leg['matchup']} -> Pick: {dropped_leg['selected_team']} ({dropped_leg['selected_odds']})")
+
+    save_parlay_to_supabase(leg1, leg2, dropped_leg)
 
 if __name__ == "__main__":
     main()
