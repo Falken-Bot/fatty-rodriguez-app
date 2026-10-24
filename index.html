@@ -446,6 +446,50 @@
             }
         }
 
+        // Convert American odds string (e.g. "-110", "+120") to decimal odds
+        function americanToDecimal(oddsStr) {
+            if (!oddsStr) return 1.909; // Default -110 standard
+            const match = oddsStr.match(/([+-]?\d+)/);
+            if (!match) return 1.909;
+            const odds = parseInt(match[1], 10);
+            if (odds > 0) {
+                return (odds / 100) + 1;
+            } else {
+                return (100 / Math.abs(odds)) + 1;
+            }
+        }
+
+        // Calculates combined 2-leg parlay odds and potential payout/profit
+        function calculateCombinedOdds(l1Str, l2Str, wager = 2) {
+            const match1 = (l1Str || '').match(/\(([+-]?\d+)\)/);
+            const match2 = (l2Str || '').match(/\(([+-]?\d+)\)/);
+            
+            const o1Str = match1 ? match1[1] : '-110';
+            const o2Str = match2 ? match2[1] : '-110';
+
+            const dec1 = americanToDecimal(o1Str);
+            const dec2 = americanToDecimal(o2Str);
+            const combinedDec = dec1 * dec2;
+
+            let americanCombined = 0;
+            if (combinedDec >= 2.0) {
+                americanCombined = Math.round((combinedDec - 1) * 100);
+            } else {
+                americanCombined = Math.round(-100 / (combinedDec - 1));
+            }
+
+            const americanFormatted = americanCombined > 0 ? `+${americanCombined}` : `${americanCombined}`;
+            const totalPayout = wager * combinedDec;
+            const netProfit = totalPayout - wager;
+
+            return {
+                oddsFormatted: americanFormatted,
+                decimal: combinedDec.toFixed(2),
+                payoutFormatted: `$${totalPayout.toFixed(2)}`,
+                profitFormatted: `$${netProfit.toFixed(2)}`
+            };
+        }
+
         function generateDetailedRationale(sport, matchup, selection, oddsStr, isCut) {
             const prob = calculateImpliedProb(oddsStr);
             const probText = prob ? prob.toFixed(1) + '%' : '52.4%';
@@ -453,10 +497,9 @@
             const lowerTeam = teamClean.toLowerCase();
 
             if (isCut) {
-                return `<strong>Distillation Logic:</strong> Evaluated in primary pool. Distilled out during the cross-sport correlation sweep to isolate the top 2-leg pairing.`;
+                return `<strong>Distillation Logic:</strong> Evaluated in primary candidate pool. Distilled out during cross-sport correlation sweep to isolate top 2-leg pairing.`;
             }
 
-            // Stat-driven "numbery + talky" analytical breakdown
             if (lowerTeam.includes('blackhawks')) {
                 return `<strong>Executive Scouting Report:</strong> Operating at United Center home ice. Opposing Montreal center Nick Suzuki (12 PTS) is OUT 2-4 weeks with an upper-body injury, crippling their top-line 1.23 PTS/GP output during a 3-game skid. Expect Connor Bedard (30G/45A pace) and Anton Frondell to exploit Montreal's depleted defense. Priced at <strong>${oddsStr || '-110'}</strong> (~${probText} implied prob) within our strict -130/+130 value threshold.`;
             } else if (lowerTeam.includes('bulls')) {
@@ -521,7 +564,7 @@
         }
 
         async function fetchAllBets() {
-            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.desc&limit=25`;
+            let url = `${SUPABASE_URL}/rest/v1/bets?select=*&order=id.asc&limit=50`;
             let response = await fetch(url, {
                 cache: 'no-store',
                 headers: {
@@ -543,75 +586,98 @@
             const historyContainer = document.getElementById('history-container');
 
             try {
-                const bets = await fetchAllBets();
-                if (bets.length > 0) {
-                    currentLatestId = bets[0].id;
-                    const latest = bets[0];
-                    
-                    let wins = 0;
-                    let losses = 0;
-                    let pushes = 0;
+                const rawBets = await fetchAllBets();
+                if (rawBets.length > 0) {
+                    // Latest bet is last item when ordered ascending
+                    const latest = rawBets[rawBets.length - 1];
+                    currentLatestId = latest.id;
 
-                    bets.forEach(b => {
+                    // Compute chronological progressive running records & PnL
+                    let runningWins = 0;
+                    let runningLosses = 0;
+                    let runningPushes = 0;
+                    let totalPnL = 0;
+
+                    const processedBets = rawBets.map(b => {
                         const st = (b.status || '').toLowerCase().trim();
-                        if (st === 'win' || st === 'won') wins++;
-                        else if (st === 'loss' || st === 'lost') losses++;
-                        else if (st === 'push') pushes++;
+                        const wager = Number(b.wager_amount || 2);
+                        const parsed = parsePickString(b.pick);
+                        const parlayMath = calculateCombinedOdds(parsed.l1, parsed.l2, wager);
+
+                        let pnl = 0;
+                        if (st === 'win' || st === 'won') {
+                            runningWins++;
+                            pnl = parseFloat(parlayMath.profitFormatted.replace('$', ''));
+                        } else if (st === 'loss' || st === 'lost') {
+                            runningLosses++;
+                            pnl = -wager;
+                        } else if (st === 'push') {
+                            runningPushes++;
+                        }
+                        totalPnL += pnl;
+
+                        return {
+                            ...b,
+                            parsed,
+                            parlayMath,
+                            stFormatted: st.toUpperCase(),
+                            runningRecordStr: `${runningWins}-${runningLosses}${runningPushes > 0 ? ` (${runningPushes}P)` : ''}`,
+                            dailyPnlStr: pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`
+                        };
                     });
 
-                    const totalDecided = wins + losses;
-                    const winPct = totalDecided > 0 ? ((wins / totalDecided) * 100).toFixed(1) + '%' : '0.0%';
+                    // Update Top Hero Banner with Final Tally
+                    const totalDecided = runningWins + runningLosses;
+                    const winPct = totalDecided > 0 ? ((runningWins / totalDecided) * 100).toFixed(1) + '%' : '0.0%';
+                    const pnlSign = totalPnL >= 0 ? '+' : '-';
+                    document.getElementById('hero-record-digits').innerText = `${runningWins} - ${runningLosses}${runningPushes > 0 ? ` (${runningPushes}P)` : ''}`;
+                    document.getElementById('hero-record-pct').innerText = `WIN RATE: ${winPct} | P/L: ${pnlSign}$${Math.abs(totalPnL).toFixed(2)}`;
 
-                    document.getElementById('hero-record-digits').innerText = `${wins} - ${losses}${pushes > 0 ? ` (${pushes}P)` : ''}`;
-                    document.getElementById('hero-record-pct').innerText = `WIN RATE: ${winPct}`;
-
-                    const latestParsed = parsePickString(latest.pick);
-                    const wagerAmount = Number(latest.wager_amount || 2).toFixed(2);
-                    const eventDate = latest.event_date || 'Today';
-                    const status = (latest.status || 'pending').toUpperCase();
+                    // Latest active bet rendering
+                    const latestProc = processedBets[processedBets.length - 1];
+                    const wagerAmount = Number(latestProc.wager_amount || 2).toFixed(2);
+                    const eventDate = latestProc.event_date || 'Today';
 
                     parlayContainer.innerHTML = `
                         <div class="parlay-card">
                             <h3>
-                                <span>FATTY'S 2-LEG CROSS-SPORT PARLAY</span>
-                                <span>$${wagerAmount} BASE WAGER</span>
+                                <span>FATTY'S 2-LEG PARLAY (${latestProc.parlayMath.oddsFormatted})</span>
+                                <span>$${wagerAmount} WAGER &rarr; PAYOUT: ${latestProc.parlayMath.payoutFormatted}</span>
                             </h3>
                             
                             <div class="leg-box active-leg">
-                                ${renderPickBox(latestParsed.l1, false)}
+                                ${renderPickBox(latestProc.parsed.l1, false)}
                             </div>
 
                             <div class="leg-box active-leg">
-                                ${renderPickBox(latestParsed.l2, false)}
+                                ${renderPickBox(latestProc.parsed.l2, false)}
                             </div>
 
                             <div class="leg-box cut-leg">
-                                ${renderPickBox(latestParsed.l3, true)}
+                                ${renderPickBox(latestProc.parsed.l3, true)}
                             </div>
 
                             <div class="distill-reason">
                                 <strong>Date Locked:</strong> ${eventDate} &nbsp;|&nbsp; 
-                                <strong>System Status:</strong> <span style="color: var(--gold);">${status}</span> &nbsp;|&nbsp; 
-                                <strong>Execution Profile:</strong> Strict cross-sport decoupling enforced across active market lines.
+                                <strong>System Status:</strong> <span style="color: var(--gold);">${latestProc.stFormatted}</span> &nbsp;|&nbsp; 
+                                <strong>Est. Profit:</strong> <span style="color: #34D399;">${latestProc.parlayMath.profitFormatted}</span>
                             </div>
                         </div>
                     `;
 
-                    if (bets.length > 1) {
+                    // Render Historical Archive (descending order, omitting record ID, displaying running record)
+                    if (processedBets.length > 1) {
                         let historyHTML = '';
-                        for (let i = 1; i < bets.length; i++) {
-                            const b = bets[i];
+                        for (let i = processedBets.length - 2; i >= 0; i--) {
+                            const b = processedBets[i];
                             const hDate = b.event_date || 'Past';
-                            const hId = b.id || i;
-                            const hStatus = (b.status || 'pending').toUpperCase();
-                            const hWager = Number(b.wager_amount || 2).toFixed(2);
                             const hPick = b.pick || 'No pick data';
 
                             historyHTML += `
                                 <div class="history-card">
                                     <div class="history-header">
-                                        <span>DATE: ${hDate} &nbsp;|&nbsp; RECORD ID #${hId}</span>
-                                        <span>STATUS: ${hStatus} &nbsp;|&nbsp; WAGER: $${hWager}</span>
+                                        <span>DATE: ${hDate} &nbsp;|&nbsp; PARLAY ODDS: ${b.parlayMath.oddsFormatted}</span>
+                                        <span>STATUS: ${b.stFormatted} &nbsp;|&nbsp; RUNNING RECORD: ${b.runningRecordStr}</span>
                                     </div>
                                     <div class="history-summary">${hPick}</div>
                                 </div>
@@ -669,7 +735,7 @@
                     
                     try {
                         const newBets = await fetchAllBets();
-                        if (newBets.length > 0 && newBets[0].id !== initialId) {
+                        if (newBets.length > 0 && newBets[newBets.length - 1].id !== initialId) {
                             clearInterval(pollInterval);
                             statusDiv.innerText = "New cross-sport parlay locked! Updating terminal...";
                             setTimeout(() => location.reload(true), 600);
