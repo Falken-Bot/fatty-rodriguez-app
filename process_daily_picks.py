@@ -178,6 +178,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
 
     full_pick_payload = f"{l1_str} || {l2_str} || {l3_str}"
     combined_sport_label = f"{leg1['sport_name']} / {leg2['sport_name']}"
+    combined_matchup_label = f"{leg1['matchup']} / {leg2['matchup']}"
 
     endpoint = get_supabase_endpoint()
     url = f"{endpoint}/bets"
@@ -190,6 +191,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     data = {
         "event_date": event_date,
         "sport": combined_sport_label,
+        "matchup": combined_matchup_label,
         "pick": full_pick_payload,
         "wager_amount": 2.00,
         "status": "pending"
@@ -247,9 +249,3 @@ def main():
     print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
     print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
     if dropped_leg:
-        print(f"Distilled Leg 3: {dropped_leg['sport_name']} - {dropped_leg['matchup']} -> Pick: {dropped_leg['selected_team']} ({dropped_leg['selected_odds']})")
-
-    save_parlay_to_supabase(leg1, leg2, dropped_leg)
-
-if __name__ == "__main__":
-    main()
