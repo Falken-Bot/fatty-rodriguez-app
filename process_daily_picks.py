@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# ESPN Public API Endpoint Mappings
+# ESPN Public API Endpoint Mappings (WNBA and MLB removed)
 ESPN_SPORT_ENDPOINTS = {
     "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
@@ -116,12 +116,10 @@ def extract_even_money_candidates(events, sport_key):
             else:
                 away_team = team_name
 
-        # Extract moneyline odds from competition-level odds payload (ESPN standard path)
         odds_list = comp.get("odds", [])
         if odds_list:
             provider_odds = odds_list[0]
             try:
-                # Check for structured home/away moneyline fields
                 h_ml = provider_odds.get("homeTeamOdds", {}).get("moneyLine")
                 a_ml = provider_odds.get("awayTeamOdds", {}).get("moneyLine")
                 if h_ml is not None and a_ml is not None:
@@ -130,7 +128,6 @@ def extract_even_money_candidates(events, sport_key):
             except:
                 pass
 
-        # Fallback check if odds are embedded directly in competitor objects
         if home_odds is None or away_odds is None:
             for c in competitors:
                 is_home = (c.get("homeAway") == "home")
@@ -145,11 +142,9 @@ def extract_even_money_candidates(events, sport_key):
                     except:
                         pass
 
-        # Drop game immediately if valid moneyline data is missing
         if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
-        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
@@ -179,16 +174,13 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
-    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
-    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
-    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -219,7 +211,6 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     event_date = datetime.now(eastern).strftime('%Y-%m-%d')
     endpoint = get_supabase_endpoint()
 
-    # Prevent duplicate entries for today's date
     check_url = f"{endpoint}/bets?event_date=eq.{event_date}&select=id"
     get_headers = {
         "apikey": SUPABASE_KEY,
@@ -300,7 +291,6 @@ def main():
     leg2 = None
     dropped_leg = None
 
-    # Pass 1: Cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
@@ -310,7 +300,6 @@ def main():
         if leg2 is not None and dropped_leg is not None:
             break
 
-    # Pass 2: Same-sport distinct matchup fallback
     if not leg2:
         for candidate in evaluated_candidates[1:]:
             if candidate["matchup"] != leg1["matchup"] and leg2 is None:
