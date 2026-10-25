@@ -16,7 +16,7 @@ ESPN_SCOREBOARD_ENDPOINTS = {
 
 ESPN_CORE_PATHS = {
     "basketball_nba": ("basketball", "nba"),
-    "icehockey_nhl": "hockey",
+    "icehockey_nhl": ("hockey", "nhl"),
     "americanfootball_nfl": ("football", "nfl"),
     "americanfootball_ncaaf": ("football", "college-football")
 }
@@ -91,7 +91,7 @@ def fetch_scoreboard_events(sport_key):
 
 def fetch_core_odds(sport_key, event_id):
     path_info = ESPN_CORE_PATHS.get(sport_key)
-    if not path_info:
+    if not path_info or not isinstance(path_info, tuple) or len(path_info) != 2:
         return None
     
     sport_p, league_p = path_info
@@ -104,7 +104,6 @@ def fetch_core_odds(sport_key, event_id):
             data = res.json()
             items = data.get("items", [])
             if items:
-                # Target DraftKings or first available provider item
                 for item in items:
                     provider = item.get("provider", {}).get("name", "").lower()
                     if "draftkings" in provider or "espn" in provider or provider:
@@ -160,10 +159,8 @@ def extract_even_money_candidates(events, sport_key):
         if not home_team or not away_team:
             continue
 
-        # Fetch verified moneyline odds from ESPN Core API endpoint
         odds_tuple = fetch_core_odds(sport_key, event_id)
         if not odds_tuple:
-            # Fallback to scoreboard competition odds payload if core lookup is empty
             home_odds, away_odds = None, None
             odds_list = comp.get("odds", [])
             for provider_odds in odds_list:
@@ -176,11 +173,9 @@ def extract_even_money_candidates(events, sport_key):
         else:
             home_odds, away_odds = odds_tuple
 
-        # ZERO-FALLBACK RULE: Drop immediately if missing verified moneyline
         if home_odds is None or away_odds is None:
             continue
 
-        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
