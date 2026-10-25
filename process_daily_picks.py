@@ -129,7 +129,6 @@ def extract_even_money_candidates(events, sport_key):
         if not home_team or not away_team:
             continue
 
-        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
@@ -159,16 +158,13 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
-    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
-    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
-    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -197,6 +193,23 @@ def run_head_to_head_metrics(candidate):
 def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     eastern = ZoneInfo('America/New_York')
     event_date = datetime.now(eastern).strftime('%Y-%m-%d')
+    endpoint = get_supabase_endpoint()
+
+    # Prevent duplicate entries for today's date
+    check_url = f"{endpoint}/bets?event_date=eq.{event_date}&select=id"
+    get_headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+    try:
+        existing_res = requests.get(check_url, headers=get_headers)
+        if existing_res.status_code == 200:
+            records = existing_res.json()
+            if records:
+                print(f"Parlay for {event_date} already exists in Supabase. Skipping duplicate insertion.")
+                return
+    except Exception as e:
+        print(f"Exception checking existing records: {e}")
 
     l1_str = f"LEG1: {leg1['sport_name']} | {leg1['matchup']} | Pick: {leg1['selected_team']} ({leg1['selected_odds']})"
     l2_str = f"LEG2: {leg2['sport_name']} | {leg2['matchup']} | Pick: {leg2['selected_team']} ({leg2['selected_odds']})"
@@ -211,9 +224,8 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     combined_matchup_label = f"{leg1['matchup']} / {leg2['matchup']}"
     combined_odds_str = calculate_combined_american_odds(leg1['selected_odds'], leg2['selected_odds'])
 
-    endpoint = get_supabase_endpoint()
     url = f"{endpoint}/bets"
-    headers = {
+    post_headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
@@ -230,7 +242,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     }
 
     try:
-        res = requests.post(url, json=data, headers=headers)
+        res = requests.post(url, json=data, headers=post_headers)
         if res.status_code in [200, 201]:
             print("Successfully saved daily even-money parlay to Supabase via public feed.")
         else:
@@ -264,7 +276,6 @@ def main():
     leg2 = None
     dropped_leg = None
 
-    # Pass 1: Attempt cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
@@ -274,7 +285,6 @@ def main():
         if leg2 is not None and dropped_leg is not None:
             break
 
-    # Pass 2 Fallback: If no cross-sport leg was found, allow same-sport distinct matchup
     if not leg2:
         for candidate in evaluated_candidates[1:]:
             if candidate["matchup"] != leg1["matchup"] and leg2 is None:
