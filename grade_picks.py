@@ -74,10 +74,6 @@ def fetch_completed_events_for_date(sport_name, event_date_str):
     return []
 
 def evaluate_leg(leg_text, event_date_str):
-    """
-    Parses a leg string and checks ESPN public scoreboards to see if the pick won, lost, or is still pending.
-    Returns: True (Won), False (Lost), or None (Pending/Incomplete)
-    """
     parts = [p.strip() for p in leg_text.split('|')]
     if len(parts) < 3:
         return None
@@ -115,7 +111,6 @@ def evaluate_leg(leg_text, event_date_str):
         if len(competitors) != 2:
             continue
 
-        winner_team = None
         home_score, away_score = 0, 0
         h_name, a_name = "", ""
 
@@ -158,8 +153,9 @@ def main():
         event_date = bet.get("event_date")
         pick_payload = bet.get("pick", "")
 
-        if event_date > today_str:
-            print(f"Bet #{bet_id}: Event date is in the future ({event_date}). Skipping.")
+        # STRICT RULE: Never grade today's picks. They must remain pending until future dates.
+        if event_date >= today_str:
+            print(f"Bet #{bet_id}: Event date is today or in the future ({event_date}). Skipping grading.")
             continue
 
         legs = [l.strip() for l in pick_payload.split('||')]
@@ -177,7 +173,7 @@ def main():
         elif any(r is False for r in leg_results):
             update_bet_status(bet_id, "lost")
         else:
-            print(f"Bet #{bet_id}: Remains pending (waiting on incomplete games).")
+            print(f"Bet #{bet_id}: Remains pending.")
 
 if __name__ == "__main__":
     main()
