@@ -55,9 +55,13 @@ def get_supabase_endpoint():
     return f"{clean_url}/rest/v1"
 
 def fetch_public_odds(sport_key):
-    url = ESPN_SPORT_ENDPOINTS.get(sport_key)
-    if not url:
+    base_url = ESPN_SPORT_ENDPOINTS.get(sport_key)
+    if not base_url:
         return []
+    
+    eastern = ZoneInfo('America/New_York')
+    today_date_str = datetime.now(eastern).strftime('%Y%m%d')
+    url = f"{base_url}?dates={today_date_str}"
     
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
@@ -107,8 +111,7 @@ def extract_even_money_candidates(events, sport_key):
             team_name = c.get("team", {}).get("displayName")
             is_home = (c.get("homeAway") == "home")
             
-            # Extract moneyline odds from public provider data if available
-            odds_val = -110 # Default fallback line if provider odds are hidden
+            odds_val = -110 
             lines = c.get("odds", [])
             if lines:
                 try:
@@ -201,7 +204,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     if dropped_leg:
         l3_str = f"DROPPED: {dropped_leg['sport_name']} | {dropped_leg['matchup']} | Pick: {dropped_leg['selected_team']} ({dropped_leg['selected_odds']})"
     else:
-        l3_str = "DROPPED: No third cross-sport candidate available"
+        l3_str = "DROPPED: No third candidate available"
 
     full_pick_payload = f"{l1_str} || {l2_str} || {l3_str}"
     combined_sport_label = f"{leg1['sport_name']} / {leg2['sport_name']}"
@@ -261,17 +264,29 @@ def main():
     leg2 = None
     dropped_leg = None
 
+    # Pass 1: Attempt cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
-        elif dropped_leg is None:
+        elif dropped_leg is None and candidate["matchup"] != leg1["matchup"]:
             dropped_leg = candidate
 
         if leg2 is not None and dropped_leg is not None:
             break
 
+    # Pass 2 Fallback: If no cross-sport leg was found, allow same-sport distinct matchup
     if not leg2:
-        print("Could not find two unique cross-sport legs among even-money candidates.")
+        for candidate in evaluated_candidates[1:]:
+            if candidate["matchup"] != leg1["matchup"] and leg2 is None:
+                leg2 = candidate
+            elif dropped_leg is None and candidate["matchup"] != leg1["matchup"] and candidate != leg2:
+                dropped_leg = candidate
+
+            if leg2 is not None:
+                break
+
+    if not leg2:
+        print("Could not find two unique matchups among even-money candidates.")
         return
 
     print("\n--- TODAY'S FREE FEED LOCKED PARLAY ---")
