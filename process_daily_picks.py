@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# ESPN Public API Endpoint Mappings (WNBA and MLB removed)
+# ESPN Public API Endpoint Mappings (MLB and WNBA excluded)
 ESPN_SPORT_ENDPOINTS = {
     "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
@@ -84,11 +84,13 @@ def filter_games_for_today(events):
         if not date_str:
             continue
         
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(eastern)
-        game_date_str = dt.strftime('%Y-%m-%d')
-
-        if game_date_str == today_str:
-            today_games.append(event)
+        try:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(eastern)
+            game_date_str = dt.strftime('%Y-%m-%d')
+            if game_date_str == today_str:
+                today_games.append(event)
+        except Exception:
+            continue
 
     return today_games
 
@@ -116,18 +118,20 @@ def extract_even_money_candidates(events, sport_key):
             else:
                 away_team = team_name
 
+        # Deep extraction from competition-level odds providers
         odds_list = comp.get("odds", [])
-        if odds_list:
-            provider_odds = odds_list[0]
+        for provider_odds in odds_list:
             try:
                 h_ml = provider_odds.get("homeTeamOdds", {}).get("moneyLine")
                 a_ml = provider_odds.get("awayTeamOdds", {}).get("moneyLine")
                 if h_ml is not None and a_ml is not None:
                     home_odds = int(h_ml)
                     away_odds = int(a_ml)
+                    break
             except:
                 pass
 
+        # Fallback check inside competitor objects if competition-level odds are missing
         if home_odds is None or away_odds is None:
             for c in competitors:
                 is_home = (c.get("homeAway") == "home")
@@ -142,9 +146,11 @@ def extract_even_money_candidates(events, sport_key):
                     except:
                         pass
 
+        # Drop game immediately if data is incomplete (NO fake defaults)
         if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
+        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
@@ -174,13 +180,16 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
+    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
+    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
+    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -211,6 +220,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     event_date = datetime.now(eastern).strftime('%Y-%m-%d')
     endpoint = get_supabase_endpoint()
 
+    # Prevent duplicate entries for today's date
     check_url = f"{endpoint}/bets?event_date=eq.{event_date}&select=id"
     get_headers = {
         "apikey": SUPABASE_KEY,
@@ -259,14 +269,14 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     try:
         res = requests.post(url, json=data, headers=post_headers)
         if res.status_code in [200, 201]:
-            print("Successfully saved daily even-money parlay to Supabase via public feed.")
+            print("Successfully saved daily even-money parlay to Supabase.")
         else:
             print(f"Failed saving to Supabase ({res.status_code}): {res.text}")
     except Exception as e:
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Free Public Feed Even-Money Scan...")
+    print("Initiating Even-Money Scan...")
     all_candidates = []
 
     for sport in list(ESPN_SPORT_ENDPOINTS.keys()):
@@ -291,6 +301,7 @@ def main():
     leg2 = None
     dropped_leg = None
 
+    # Pass 1: Cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
@@ -300,6 +311,7 @@ def main():
         if leg2 is not None and dropped_leg is not None:
             break
 
+    # Pass 2: Same-sport distinct matchup fallback
     if not leg2:
         for candidate in evaluated_candidates[1:]:
             if candidate["matchup"] != leg1["matchup"] and leg2 is None:
@@ -314,7 +326,7 @@ def main():
         print("Could not find two unique matchups among even-money candidates.")
         return
 
-    print("\n--- TODAY'S FREE FEED LOCKED PARLAY ---")
+    print("\n--- TODAY'S LOCKED PARLAY ---")
     print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
     print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
     if dropped_leg:
