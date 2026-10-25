@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# ESPN Public API Endpoint Mappings (MLB and WNBA excluded)
+# Active public scoreboard endpoints (MLB and WNBA excluded)
 ESPN_SPORT_ENDPOINTS = {
     "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
@@ -20,6 +20,14 @@ SPORT_DISPLAY_NAMES = {
     "americanfootball_nfl": "NFL",
     "americanfootball_ncaaf": "NCAAF"
 }
+
+def safe_int(val):
+    if val is None:
+        return None
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return None
 
 def american_to_decimal(odds):
     if odds > 0:
@@ -118,35 +126,30 @@ def extract_even_money_candidates(events, sport_key):
             else:
                 away_team = team_name
 
-        # Deep extraction from competition-level odds providers
+        # Deep extraction from competition-level odds providers using safe_int
         odds_list = comp.get("odds", [])
         for provider_odds in odds_list:
-            try:
-                h_ml = provider_odds.get("homeTeamOdds", {}).get("moneyLine")
-                a_ml = provider_odds.get("awayTeamOdds", {}).get("moneyLine")
-                if h_ml is not None and a_ml is not None:
-                    home_odds = int(h_ml)
-                    away_odds = int(a_ml)
-                    break
-            except:
-                pass
+            h_ml = safe_int(provider_odds.get("homeTeamOdds", {}).get("moneyLine"))
+            a_ml = safe_int(provider_odds.get("awayTeamOdds", {}).get("moneyLine"))
+            if h_ml is not None and a_ml is not None:
+                home_odds = h_ml
+                away_odds = a_ml
+                break
 
-        # Fallback check inside competitor objects if competition-level odds are missing
+        # Fallback check inside competitor objects if competition odds are missing
         if home_odds is None or away_odds is None:
             for c in competitors:
                 is_home = (c.get("homeAway") == "home")
                 lines = c.get("odds", [])
                 if lines:
-                    try:
-                        val = int(lines[0].get("moneyLine"))
+                    val = safe_int(lines[0].get("moneyLine"))
+                    if val is not None:
                         if is_home:
                             home_odds = val
                         else:
                             away_odds = val
-                    except:
-                        pass
 
-        # Drop game immediately if data is incomplete (NO fake defaults)
+        # ZERO-FALLBACK RULE: Drop immediately if missing verified provider moneyline
         if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
