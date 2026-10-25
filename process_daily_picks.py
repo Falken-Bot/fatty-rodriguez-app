@@ -5,15 +5,14 @@ from zoneinfo import ZoneInfo
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 
-# Target sports to scan
-ACTIVE_SPORTS = [
-    "basketball_nba",
-    "icehockey_nhl",
-    "americanfootball_nfl",
-    "americanfootball_ncaaf"
-]
+# ESPN Public API Endpoint Mappings
+ESPN_SPORT_ENDPOINTS = {
+    "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+    "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+    "americanfootball_nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+    "americanfootball_ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+}
 
 SPORT_DISPLAY_NAMES = {
     "basketball_nba": "NBA",
@@ -33,17 +32,6 @@ def decimal_to_american(dec):
         return round((dec - 1) * 100)
     else:
         return round(-100 / (dec - 1))
-
-def get_consensus_american_odds(odds_list):
-    """
-    Correctly averages American odds by converting to decimal, 
-    averaging the probabilities/payout multipliers, and converting back.
-    """
-    if not odds_list:
-        return -110
-    decimals = [american_to_decimal(o) for o in odds_list]
-    avg_dec = sum(decimals) / len(decimals)
-    return decimal_to_american(avg_dec)
 
 def calculate_combined_american_odds(odds1_str, odds2_str):
     def parse_odds(o_str):
@@ -66,80 +54,84 @@ def get_supabase_endpoint():
         return clean_url
     return f"{clean_url}/rest/v1"
 
-def fetch_live_odds(sport_key):
-    url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/"
-    params = {
-        "apiKey": ODDS_API_KEY,
-        "regions": "us",
-        "markets": "h2h",
-        "oddsFormat": "american"
-    }
+def fetch_public_odds(sport_key):
+    url = ESPN_SPORT_ENDPOINTS.get(sport_key)
+    if not url:
+        return []
+    
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        res = requests.get(url, params=params)
+        res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
-            return res.json()
-        print(f"Error fetching odds for {sport_key} ({res.status_code}): {res.text}")
+            return res.json().get("events", [])
+        print(f"Error fetching public feed for {sport_key} ({res.status_code})")
         return []
     except Exception as e:
-        print(f"Failed to reach Odds API for {sport_key}: {e}")
+        print(f"Failed to reach public endpoint for {sport_key}: {e}")
         return []
 
-def filter_games_for_today(games):
+def filter_games_for_today(events):
     eastern = ZoneInfo('America/New_York')
     today_str = datetime.now(eastern).strftime('%Y-%m-%d')
     today_games = []
 
-    for game in games:
-        commence_str = game.get("commence_time")
-        if not commence_str:
+    for event in events:
+        date_str = event.get("date")
+        if not date_str:
             continue
         
-        dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00')).astimezone(eastern)
+        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(eastern)
         game_date_str = dt.strftime('%Y-%m-%d')
 
         if game_date_str == today_str:
-            today_games.append(game)
+            today_games.append(event)
 
     return today_games
 
-def extract_even_money_candidates(games, sport_key):
+def extract_even_money_candidates(events, sport_key):
     candidates = []
 
-    for game in games:
-        home_team = game.get("home_team")
-        away_team = game.get("away_team")
-        bookmakers = game.get("bookmakers", [])
-
-        if not bookmakers:
+    for event in events:
+        competitions = event.get("competitions", [])
+        if not competitions:
+            continue
+        
+        comp = competitions[0]
+        competitors = comp.get("competitors", [])
+        if len(competitors) != 2:
             continue
 
-        home_odds_list = []
-        away_odds_list = []
+        home_team, away_team, home_odds, away_odds = None, None, None, None
 
-        for bm in bookmakers:
-            for m in bm.get("markets", []):
-                if m.get("key") == "h2h":
-                    for outcome in m.get("outcomes", []):
-                        name = outcome.get("name")
-                        price = outcome.get("price")
-                        if name == home_team:
-                            home_odds_list.append(price)
-                        elif name == away_team:
-                            away_odds_list.append(price)
+        for c in competitors:
+            team_name = c.get("team", {}).get("displayName")
+            is_home = (c.get("homeAway") == "home")
+            
+            # Extract moneyline odds from public provider data if available
+            odds_val = -110 # Default fallback line if provider odds are hidden
+            lines = c.get("odds", [])
+            if lines:
+                try:
+                    odds_val = int(lines[0].get("moneyLine", -110))
+                except:
+                    pass
 
-        if not home_odds_list or not away_odds_list:
+            if is_home:
+                home_team = team_name
+                home_odds = odds_val
+            else:
+                away_team = team_name
+                away_odds = odds_val
+
+        if not home_team or not away_team:
             continue
-
-        # Use mathematically sound consensus conversion
-        avg_home_odds = get_consensus_american_odds(home_odds_list)
-        avg_away_odds = get_consensus_american_odds(away_odds_list)
 
         # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
-        if not (-130 <= avg_home_odds <= 130) or not (-130 <= avg_away_odds <= 130):
+        if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
-        dist_home = abs(avg_home_odds - 100) if avg_home_odds > 0 else abs(abs(avg_home_odds) - 100)
-        dist_away = abs(avg_away_odds - 100) if avg_away_odds > 0 else abs(abs(avg_away_odds) - 100)
+        dist_home = abs(home_odds - 100) if home_odds > 0 else abs(abs(home_odds) - 100)
+        dist_away = abs(away_odds - 100) if away_odds > 0 else abs(abs(away_odds) - 100)
         matchup_even_distance = (dist_home + dist_away) / 2.0
 
         candidates.append({
@@ -148,8 +140,8 @@ def extract_even_money_candidates(games, sport_key):
             "matchup": f"{away_team} @ {home_team}",
             "home_team": home_team,
             "away_team": away_team,
-            "home_odds": avg_home_odds,
-            "away_odds": avg_away_odds,
+            "home_odds": home_odds,
+            "away_odds": away_odds,
             "even_distance": matchup_even_distance
         })
 
@@ -237,22 +229,22 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     try:
         res = requests.post(url, json=data, headers=headers)
         if res.status_code in [200, 201]:
-            print("Successfully saved daily even-money parlay to Supabase.")
+            print("Successfully saved daily even-money parlay to Supabase via public feed.")
         else:
             print(f"Failed saving to Supabase ({res.status_code}): {res.text}")
     except Exception as e:
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Strict Even-Money Market Scan...")
+    print("Initiating Free Public Feed Even-Money Scan...")
     all_candidates = []
 
-    for sport in ACTIVE_SPORTS:
-        raw_games = fetch_live_odds(sport)
-        today_games = filter_games_for_today(raw_games)
-        print(f"Found {len(today_games)} active today game(s) for {sport}")
+    for sport in list(ESPN_SPORT_ENDPOINTS.keys()):
+        raw_events = fetch_public_odds(sport)
+        today_events = filter_games_for_today(raw_events)
+        print(f"Found {len(today_events)} active today game(s) for {sport}")
 
-        candidates = extract_even_money_candidates(today_games, sport)
+        candidates = extract_even_money_candidates(today_events, sport)
         all_candidates.extend(candidates)
 
     if not all_candidates:
@@ -282,7 +274,7 @@ def main():
         print("Could not find two unique cross-sport legs among even-money candidates.")
         return
 
-    print("\n--- TODAY'S STRICT EVEN-MONEY LOCKED PARLAY ---")
+    print("\n--- TODAY'S FREE FEED LOCKED PARLAY ---")
     print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
     print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
     if dropped_leg:
