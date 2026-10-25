@@ -6,12 +6,19 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# Active public scoreboard endpoints (MLB and WNBA excluded)
-ESPN_SPORT_ENDPOINTS = {
+# ESPN Scoreboard and Core API Path Mappings (WNBA and MLB excluded)
+ESPN_SCOREBOARD_ENDPOINTS = {
     "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
     "americanfootball_nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
     "americanfootball_ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+}
+
+ESPN_CORE_PATHS = {
+    "basketball_nba": ("basketball", "nba"),
+    "icehockey_nhl": "hockey",
+    "americanfootball_nfl": ("football", "nfl"),
+    "americanfootball_ncaaf": ("football", "college-football")
 }
 
 SPORT_DISPLAY_NAMES = {
@@ -62,8 +69,8 @@ def get_supabase_endpoint():
         return clean_url
     return f"{clean_url}/rest/v1"
 
-def fetch_public_odds(sport_key):
-    base_url = ESPN_SPORT_ENDPOINTS.get(sport_key)
+def fetch_scoreboard_events(sport_key):
+    base_url = ESPN_SCOREBOARD_ENDPOINTS.get(sport_key)
     if not base_url:
         return []
     
@@ -76,11 +83,38 @@ def fetch_public_odds(sport_key):
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             return res.json().get("events", [])
-        print(f"Error fetching public feed for {sport_key} ({res.status_code})")
+        print(f"Error fetching scoreboard for {sport_key} ({res.status_code})")
         return []
     except Exception as e:
-        print(f"Failed to reach public endpoint for {sport_key}: {e}")
+        print(f"Failed to reach scoreboard endpoint for {sport_key}: {e}")
         return []
+
+def fetch_core_odds(sport_key, event_id):
+    path_info = ESPN_CORE_PATHS.get(sport_key)
+    if not path_info:
+        return None
+    
+    sport_p, league_p = path_info
+    url = f"https://sports.core.api.espn.com/v2/sports/{sport_p}/leagues/{league_p}/events/{event_id}/competitions/{event_id}/odds"
+    
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            items = data.get("items", [])
+            if items:
+                # Target DraftKings or first available provider item
+                for item in items:
+                    provider = item.get("provider", {}).get("name", "").lower()
+                    if "draftkings" in provider or "espn" in provider or provider:
+                        h_odds = safe_int(item.get("homeTeamOdds", {}).get("moneyLine"))
+                        a_odds = safe_int(item.get("awayTeamOdds", {}).get("moneyLine"))
+                        if h_odds is not None and a_odds is not None:
+                            return h_odds, a_odds
+        return None
+    except Exception:
+        return None
 
 def filter_games_for_today(events):
     eastern = ZoneInfo('America/New_York')
@@ -91,7 +125,6 @@ def filter_games_for_today(events):
         date_str = event.get("date")
         if not date_str:
             continue
-        
         try:
             dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(eastern)
             game_date_str = dt.strftime('%Y-%m-%d')
@@ -106,8 +139,9 @@ def extract_even_money_candidates(events, sport_key):
     candidates = []
 
     for event in events:
+        event_id = event.get("id")
         competitions = event.get("competitions", [])
-        if not competitions:
+        if not competitions or not event_id:
             continue
         
         comp = competitions[0]
@@ -116,41 +150,34 @@ def extract_even_money_candidates(events, sport_key):
             continue
 
         home_team, away_team = None, None
-        home_odds, away_odds = None, None
-
         for c in competitors:
             team_name = c.get("team", {}).get("displayName")
-            is_home = (c.get("homeAway") == "home")
-            if is_home:
+            if c.get("homeAway") == "home":
                 home_team = team_name
             else:
                 away_team = team_name
 
-        # Deep extraction from competition-level odds providers using safe_int
-        odds_list = comp.get("odds", [])
-        for provider_odds in odds_list:
-            h_ml = safe_int(provider_odds.get("homeTeamOdds", {}).get("moneyLine"))
-            a_ml = safe_int(provider_odds.get("awayTeamOdds", {}).get("moneyLine"))
-            if h_ml is not None and a_ml is not None:
-                home_odds = h_ml
-                away_odds = a_ml
-                break
+        if not home_team or not away_team:
+            continue
 
-        # Fallback check inside competitor objects if competition odds are missing
+        # Fetch verified moneyline odds from ESPN Core API endpoint
+        odds_tuple = fetch_core_odds(sport_key, event_id)
+        if not odds_tuple:
+            # Fallback to scoreboard competition odds payload if core lookup is empty
+            home_odds, away_odds = None, None
+            odds_list = comp.get("odds", [])
+            for provider_odds in odds_list:
+                h_ml = safe_int(provider_odds.get("homeTeamOdds", {}).get("moneyLine"))
+                a_ml = safe_int(provider_odds.get("awayTeamOdds", {}).get("moneyLine"))
+                if h_ml is not None and a_ml is not None:
+                    home_odds = h_ml
+                    away_odds = a_ml
+                    break
+        else:
+            home_odds, away_odds = odds_tuple
+
+        # ZERO-FALLBACK RULE: Drop immediately if missing verified moneyline
         if home_odds is None or away_odds is None:
-            for c in competitors:
-                is_home = (c.get("homeAway") == "home")
-                lines = c.get("odds", [])
-                if lines:
-                    val = safe_int(lines[0].get("moneyLine"))
-                    if val is not None:
-                        if is_home:
-                            home_odds = val
-                        else:
-                            away_odds = val
-
-        # ZERO-FALLBACK RULE: Drop immediately if missing verified provider moneyline
-        if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
         # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
@@ -183,16 +210,13 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
-    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
-    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
-    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -223,7 +247,6 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
     event_date = datetime.now(eastern).strftime('%Y-%m-%d')
     endpoint = get_supabase_endpoint()
 
-    # Prevent duplicate entries for today's date
     check_url = f"{endpoint}/bets?event_date=eq.{event_date}&select=id"
     get_headers = {
         "apikey": SUPABASE_KEY,
@@ -279,11 +302,11 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Even-Money Scan...")
+    print("Initiating Core API Even-Money Scan...")
     all_candidates = []
 
-    for sport in list(ESPN_SPORT_ENDPOINTS.keys()):
-        raw_events = fetch_public_odds(sport)
+    for sport in list(ESPN_SCOREBOARD_ENDPOINTS.keys()):
+        raw_events = fetch_scoreboard_events(sport)
         today_events = filter_games_for_today(raw_events)
         print(f"Found {len(today_events)} active today game(s) for {sport}")
 
@@ -304,7 +327,6 @@ def main():
     leg2 = None
     dropped_leg = None
 
-    # Pass 1: Cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
@@ -314,7 +336,6 @@ def main():
         if leg2 is not None and dropped_leg is not None:
             break
 
-    # Pass 2: Same-sport distinct matchup fallback
     if not leg2:
         for candidate in evaluated_candidates[1:]:
             if candidate["matchup"] != leg1["matchup"] and leg2 is None:
