@@ -105,28 +105,47 @@ def extract_even_money_candidates(events, sport_key):
         if len(competitors) != 2:
             continue
 
-        home_team, away_team, home_odds, away_odds = None, None, None, None
+        home_team, away_team = None, None
+        home_odds, away_odds = None, None
 
         for c in competitors:
             team_name = c.get("team", {}).get("displayName")
             is_home = (c.get("homeAway") == "home")
-            
-            odds_val = None  # No fake default fallback; require valid line
-            lines = c.get("odds", [])
-            if lines:
-                try:
-                    odds_val = int(lines[0].get("moneyLine"))
-                except:
-                    pass
-
             if is_home:
                 home_team = team_name
-                home_odds = odds_val
             else:
                 away_team = team_name
-                away_odds = odds_val
 
-        # Drop game immediately if data is missing or incomplete
+        # Extract moneyline odds from competition-level odds payload (ESPN standard path)
+        odds_list = comp.get("odds", [])
+        if odds_list:
+            provider_odds = odds_list[0]
+            try:
+                # Check for structured home/away moneyline fields
+                h_ml = provider_odds.get("homeTeamOdds", {}).get("moneyLine")
+                a_ml = provider_odds.get("awayTeamOdds", {}).get("moneyLine")
+                if h_ml is not None and a_ml is not None:
+                    home_odds = int(h_ml)
+                    away_odds = int(a_ml)
+            except:
+                pass
+
+        # Fallback check if odds are embedded directly in competitor objects
+        if home_odds is None or away_odds is None:
+            for c in competitors:
+                is_home = (c.get("homeAway") == "home")
+                lines = c.get("odds", [])
+                if lines:
+                    try:
+                        val = int(lines[0].get("moneyLine"))
+                        if is_home:
+                            home_odds = val
+                        else:
+                            away_odds = val
+                    except:
+                        pass
+
+        # Drop game immediately if valid moneyline data is missing
         if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
