@@ -111,11 +111,11 @@ def extract_even_money_candidates(events, sport_key):
             team_name = c.get("team", {}).get("displayName")
             is_home = (c.get("homeAway") == "home")
             
-            odds_val = -110 
+            odds_val = None  # No fake default fallback; require valid line
             lines = c.get("odds", [])
             if lines:
                 try:
-                    odds_val = int(lines[0].get("moneyLine", -110))
+                    odds_val = int(lines[0].get("moneyLine"))
                 except:
                     pass
 
@@ -126,9 +126,11 @@ def extract_even_money_candidates(events, sport_key):
                 away_team = team_name
                 away_odds = odds_val
 
-        if not home_team or not away_team:
+        # Drop game immediately if data is missing or incomplete
+        if not home_team or not away_team or home_odds is None or away_odds is None:
             continue
 
+        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
@@ -158,13 +160,16 @@ def run_head_to_head_metrics(candidate):
     home_score = 50.0
     away_score = 50.0
 
+    # Metric 1: Home Advantage Baseline
     home_score += 3.5
 
+    # Metric 2: Price Line Leverage & Value Corridor
     if -115 <= h_odds <= 105:
         home_score += 4.0
     if -115 <= a_odds <= 105:
         away_score += 4.0
 
+    # Metric 3: Implied Probability Margin
     h_dec = american_to_decimal(h_odds)
     a_dec = american_to_decimal(a_odds)
     h_prob = (1 / h_dec) * 100
@@ -276,6 +281,7 @@ def main():
     leg2 = None
     dropped_leg = None
 
+    # Pass 1: Cross-sport pairing
     for candidate in evaluated_candidates[1:]:
         if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
             leg2 = candidate
@@ -285,6 +291,7 @@ def main():
         if leg2 is not None and dropped_leg is not None:
             break
 
+    # Pass 2: Same-sport distinct matchup fallback
     if not leg2:
         for candidate in evaluated_candidates[1:]:
             if candidate["matchup"] != leg1["matchup"] and leg2 is None:
