@@ -109,7 +109,6 @@ def fetch_summary_odds(sport_key, event_id):
         res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            # Check pickcenter and odds arrays in summary response
             for key in ["pickcenter", "odds"]:
                 items = data.get(key, [])
                 for item in items:
@@ -167,6 +166,7 @@ def filter_games_for_today(events):
 
 def extract_even_money_candidates(events, sport_key):
     candidates = []
+    sport_name = SPORT_DISPLAY_NAMES.get(sport_key, sport_key.upper())
 
     for event in events:
         event_id = event.get("id")
@@ -203,7 +203,7 @@ def extract_even_money_candidates(events, sport_key):
                 away_odds = a_ml
                 break
 
-        # Tier 2: Summary Endpoint lookup (/summary?event={event_id})
+        # Tier 2: Summary Endpoint lookup
         if home_odds is None or away_odds is None:
             odds_tuple = fetch_summary_odds(sport_key, event_id)
             if odds_tuple:
@@ -231,70 +231,59 @@ def extract_even_money_candidates(events, sport_key):
                 home_odds = h_val
                 away_odds = a_val
 
-        # ZERO-FALLBACK RULE: Drop immediately if missing verified moneyline across all tiers
         if home_odds is None or away_odds is None:
             continue
 
-        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
-        if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
-            continue
+        matchup_str = f"{away_team} @ {home_team}"
 
-        dist_home = abs(home_odds - 100) if home_odds > 0 else abs(abs(home_odds) - 100)
-        dist_away = abs(away_odds - 100) if away_odds > 0 else abs(abs(away_odds) - 100)
-        matchup_even_distance = (dist_home + dist_away) / 2.0
+        # INDEPENDENT SIDE CORRIDOR FILTER (-130 to +130): Check each side separately
+        if -130 <= home_odds <= 130:
+            dist_home = abs(home_odds - 100) if home_odds > 0 else abs(abs(home_odds) - 100)
+            candidates.append({
+                "sport_key": sport_key,
+                "sport_name": sport_name,
+                "matchup": matchup_str,
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_odds": home_odds,
+                "away_odds": away_odds,
+                "selected_team": home_team,
+                "selected_odds": f"+{home_odds}" if home_odds > 0 else str(home_odds),
+                "odds_val": home_odds,
+                "even_distance": dist_home
+            })
 
-        candidates.append({
-            "sport_key": sport_key,
-            "sport_name": SPORT_DISPLAY_NAMES.get(sport_key, sport_key.upper()),
-            "matchup": f"{away_team} @ {home_team}",
-            "home_team": home_team,
-            "away_team": away_team,
-            "home_odds": home_odds,
-            "away_odds": away_odds,
-            "even_distance": matchup_even_distance
-        })
+        if -130 <= away_odds <= 130:
+            dist_away = abs(away_odds - 100) if away_odds > 0 else abs(abs(away_odds) - 100)
+            candidates.append({
+                "sport_key": sport_key,
+                "sport_name": sport_name,
+                "matchup": matchup_str,
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_odds": home_odds,
+                "away_odds": away_odds,
+                "selected_team": away_team,
+                "selected_odds": f"+{away_odds}" if away_odds > 0 else str(away_odds),
+                "odds_val": away_odds,
+                "even_distance": dist_away
+            })
 
     return candidates
 
 def run_head_to_head_metrics(candidate):
-    home_team = candidate["home_team"]
-    away_team = candidate["away_team"]
-    h_odds = candidate["home_odds"]
-    a_odds = candidate["away_odds"]
-
-    home_score = 50.0
-    away_score = 50.0
-
-    home_score += 3.5
+    h_odds = candidate["odds_val"]
+    score = 50.0
+    score += 3.5
 
     if -115 <= h_odds <= 105:
-        home_score += 4.0
-    if -115 <= a_odds <= 105:
-        away_score += 4.0
+        score += 4.0
 
-    h_dec = american_to_decimal(h_odds)
-    a_dec = american_to_decimal(a_odds)
-    h_prob = (1 / h_dec) * 100
-    a_prob = (1 / a_dec) * 100
+    dec = american_to_decimal(h_odds)
+    prob = (1 / dec) * 100
+    score += prob * 0.1
 
-    if h_prob > a_prob:
-        home_score += (h_prob - a_prob)
-    else:
-        away_score += (a_prob - h_prob)
-
-    if home_score >= away_score:
-        selected_team = home_team
-        selected_odds = f"+{h_odds}" if h_odds > 0 else str(h_odds)
-        winning_score = home_score
-    else:
-        selected_team = away_team
-        selected_odds = f"+{a_odds}" if a_odds > 0 else str(a_odds)
-        winning_score = away_score
-
-    candidate["selected_team"] = selected_team
-    candidate["selected_odds"] = selected_odds
-    candidate["metric_score"] = round(winning_score, 2)
-
+    candidate["metric_score"] = round(score, 2)
     return candidate
 
 def save_parlay_to_supabase(leg1, leg2, dropped_leg):
@@ -357,7 +346,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Multi-Tier Summary API Even-Money Scan...")
+    print("Initiating Independent-Side Even-Money Scan...")
     all_candidates = []
 
     for sport in list(ESPN_SCOREBOARD_ENDPOINTS.keys()):
@@ -369,11 +358,11 @@ def main():
         all_candidates.extend(candidates)
 
     if not all_candidates:
-        print("No active matchups found within the strict even-money corridor (-130 to +130).")
+        print("No active pick candidates found within the strict even-money corridor (-130 to +130).")
         return
 
     all_candidates.sort(key=lambda x: x["even_distance"])
-    print(f"Extracted {len(all_candidates)} strict even-money matchup(s). Running head-to-head metric engine...")
+    print(f"Extracted {len(all_candidates)} strict even-money candidate pick(s). Running head-to-head metric engine...")
 
     evaluated_candidates = [run_head_to_head_metrics(c) for c in all_candidates]
     evaluated_candidates.sort(key=lambda x: x["metric_score"], reverse=True)
