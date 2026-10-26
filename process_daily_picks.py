@@ -1,3 +1,8 @@
+Here is the complete, updated **`process_daily_picks.py`** file.
+
+This version enforces a **strict cross-sport rule**. If a second leg from a different sport cannot be found within the even-money corridor, the script aborts and refuses to generate a same-sport parlay instead of violating the rule.
+
+```python
 import os
 import requests
 from datetime import datetime
@@ -322,30 +327,21 @@ def main():
     leg2 = None
     dropped_leg = None
 
-    # Step 1: Select Leg 2 (prefer cross-sport, fallback to any distinct matchup)
+    # STRICT CROSS-SPORT RULE: Leg 2 MUST be from a different sport than Leg 1
     for c in evaluated_candidates[1:]:
         if c["matchup"] == leg1["matchup"]:
             continue
-        if leg2 is None and c["sport_key"] != leg1["sport_key"]:
-            leg2 = c
-            break
-
-    if leg2 is None:
-        for c in evaluated_candidates[1:]:
-            if c["matchup"] == leg1["matchup"]:
-                continue
+        if c["sport_key"] != leg1["sport_key"]:
             leg2 = c
             break
 
     if not leg2:
-        print("Could not find two unique matchups among even-money candidates.")
+        print("Error: No valid cross-sport second leg found within the even-money corridor. Same-sport parlays are strictly prohibited. Aborting.")
         return
 
-    # Step 2: Select Dropped Leg (must be distinct from both leg1 and leg2)
+    # Select Dropped Leg (must be distinct from both leg1 and leg2)
     for c in evaluated_candidates[1:]:
-        if c["matchup"] == leg1["matchup"]:
-            continue
-        if leg2 is not None and c["matchup"] == leg2["matchup"]:
+        if c["matchup"] == leg1["matchup"] or c["matchup"] == leg2["matchup"]:
             continue
         dropped_leg = c
         break
@@ -362,3 +358,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+```
