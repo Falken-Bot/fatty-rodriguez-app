@@ -1,8 +1,3 @@
-Here is the complete, updated **`process_daily_picks.py`** file.
-
-This version enforces a **strict cross-sport rule**. If a second leg from a different sport cannot be found within the even-money corridor, the script aborts and refuses to generate a same-sport parlay instead of violating the rule.
-
-```python
 import os
 import requests
 from datetime import datetime
@@ -358,5 +353,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-```
