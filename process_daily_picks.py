@@ -6,12 +6,19 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# ESPN Scoreboard and Core API Path Mappings (WNBA and MLB excluded)
+# ESPN Scoreboard and Summary API Path Mappings (WNBA and MLB excluded)
 ESPN_SCOREBOARD_ENDPOINTS = {
     "basketball_nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "icehockey_nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
     "americanfootball_nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
     "americanfootball_ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+}
+
+ESPN_SUMMARY_PATHS = {
+    "basketball_nba": ("basketball", "nba"),
+    "icehockey_nhl": ("hockey", "nhl"),
+    "americanfootball_nfl": ("football", "nfl"),
+    "americanfootball_ncaaf": ("football", "college-football")
 }
 
 ESPN_CORE_PATHS = {
@@ -88,6 +95,31 @@ def fetch_scoreboard_events(sport_key):
     except Exception as e:
         print(f"Failed to reach scoreboard endpoint for {sport_key}: {e}")
         return []
+
+def fetch_summary_odds(sport_key, event_id):
+    path_info = ESPN_SUMMARY_PATHS.get(sport_key)
+    if not path_info or not isinstance(path_info, tuple) or len(path_info) != 2:
+        return None
+    
+    sport_p, league_p = path_info
+    url = f"https://site.api.espn.com/apis/site/v2/sports/{sport_p}/{league_p}/summary?event={event_id}"
+    
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            # Check pickcenter and odds arrays in summary response
+            for key in ["pickcenter", "odds"]:
+                items = data.get(key, [])
+                for item in items:
+                    h_ml = safe_int(item.get("homeTeamOdds", {}).get("moneyLine") or item.get("home", {}).get("moneyLine"))
+                    a_ml = safe_int(item.get("awayTeamOdds", {}).get("moneyLine") or item.get("away", {}).get("moneyLine"))
+                    if h_ml is not None and a_ml is not None:
+                        return h_ml, a_ml
+        return None
+    except Exception:
+        return None
 
 def fetch_core_odds(sport_key, event_id, comp_id=None):
     path_info = ESPN_CORE_PATHS.get(sport_key)
@@ -171,13 +203,19 @@ def extract_even_money_candidates(events, sport_key):
                 away_odds = a_ml
                 break
 
-        # Tier 2: Core API endpoint lookup with resolved competition ID
+        # Tier 2: Summary Endpoint lookup (/summary?event={event_id})
+        if home_odds is None or away_odds is None:
+            odds_tuple = fetch_summary_odds(sport_key, event_id)
+            if odds_tuple:
+                home_odds, away_odds = odds_tuple
+
+        # Tier 3: Core API endpoint lookup
         if home_odds is None or away_odds is None:
             odds_tuple = fetch_core_odds(sport_key, event_id, comp_id)
             if odds_tuple:
                 home_odds, away_odds = odds_tuple
 
-        # Tier 3: Competitor-level odds/lines fallback
+        # Tier 4: Competitor-level odds/lines fallback
         if home_odds is None or away_odds is None:
             h_val, a_val = None, None
             for c in competitors:
@@ -319,7 +357,7 @@ def save_parlay_to_supabase(leg1, leg2, dropped_leg):
         print(f"Exception writing to Supabase: {e}")
 
 def main():
-    print("Initiating Core API Even-Money Scan...")
+    print("Initiating Multi-Tier Summary API Even-Money Scan...")
     all_candidates = []
 
     for sport in list(ESPN_SCOREBOARD_ENDPOINTS.keys()):
