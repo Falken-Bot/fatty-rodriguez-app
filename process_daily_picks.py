@@ -322,34 +322,41 @@ def main():
     leg2 = None
     dropped_leg = None
 
-    for candidate in evaluated_candidates[1:]:
-        if candidate["sport_key"] != leg1["sport_key"] and leg2 is None:
-            leg2 = candidate
-        elif dropped_leg is None and candidate["matchup"] != leg1["matchup"]:
-            dropped_leg = candidate
-
-        if leg2 is not None and dropped_leg is not None:
+    # Step 1: Select Leg 2 (prefer cross-sport, fallback to any distinct matchup)
+    for c in evaluated_candidates[1:]:
+        if c["matchup"] == leg1["matchup"]:
+            continue
+        if leg2 is None and c["sport_key"] != leg1["sport_key"]:
+            leg2 = c
             break
 
-    if not leg2:
-        for candidate in evaluated_candidates[1:]:
-            if candidate["matchup"] != leg1["matchup"] and leg2 is None:
-                leg2 = candidate
-            elif dropped_leg is None and candidate["matchup"] != leg1["matchup"] and candidate != leg2:
-                dropped_leg = candidate
-
-            if leg2 is not None:
-                break
+    if leg2 is None:
+        for c in evaluated_candidates[1:]:
+            if c["matchup"] == leg1["matchup"]:
+                continue
+            leg2 = c
+            break
 
     if not leg2:
         print("Could not find two unique matchups among even-money candidates.")
         return
+
+    # Step 2: Select Dropped Leg (must be distinct from both leg1 and leg2)
+    for c in evaluated_candidates[1:]:
+        if c["matchup"] == leg1["matchup"]:
+            continue
+        if leg2 is not None and c["matchup"] == leg2["matchup"]:
+            continue
+        dropped_leg = c
+        break
 
     print("\n--- TODAY'S LOCKED PARLAY ---")
     print(f"Leg 1: {leg1['sport_name']} - {leg1['matchup']} -> Pick: {leg1['selected_team']} ({leg1['selected_odds']}) [Metric Score: {leg1['metric_score']}]")
     print(f"Leg 2: {leg2['sport_name']} - {leg2['matchup']} -> Pick: {leg2['selected_team']} ({leg2['selected_odds']}) [Metric Score: {leg2['metric_score']}]")
     if dropped_leg:
         print(f"Distilled Leg 3: {dropped_leg['sport_name']} - {dropped_leg['matchup']} -> Pick: {dropped_leg['selected_team']} ({dropped_leg['selected_odds']})")
+    else:
+        print("Distilled Leg 3: No third candidate available")
 
     save_parlay_to_supabase(leg1, leg2, dropped_leg)
 
