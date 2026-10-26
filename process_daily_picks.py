@@ -89,13 +89,14 @@ def fetch_scoreboard_events(sport_key):
         print(f"Failed to reach scoreboard endpoint for {sport_key}: {e}")
         return []
 
-def fetch_core_odds(sport_key, event_id):
+def fetch_core_odds(sport_key, event_id, comp_id=None):
     path_info = ESPN_CORE_PATHS.get(sport_key)
     if not path_info or not isinstance(path_info, tuple) or len(path_info) != 2:
         return None
     
     sport_p, league_p = path_info
-    url = f"https://sports.core.api.espn.com/v2/sports/{sport_p}/leagues/{league_p}/events/{event_id}/competitions/{event_id}/odds"
+    c_id = comp_id if comp_id else event_id
+    url = f"https://sports.core.api.espn.com/v2/sports/{sport_p}/leagues/{league_p}/events/{event_id}/competitions/{c_id}/odds"
     
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -105,12 +106,10 @@ def fetch_core_odds(sport_key, event_id):
             items = data.get("items", [])
             if items:
                 for item in items:
-                    provider = item.get("provider", {}).get("name", "").lower()
-                    if "draftkings" in provider or "espn" in provider or provider:
-                        h_odds = safe_int(item.get("homeTeamOdds", {}).get("moneyLine"))
-                        a_odds = safe_int(item.get("awayTeamOdds", {}).get("moneyLine"))
-                        if h_odds is not None and a_odds is not None:
-                            return h_odds, a_odds
+                    h_odds = safe_int(item.get("homeTeamOdds", {}).get("moneyLine"))
+                    a_odds = safe_int(item.get("awayTeamOdds", {}).get("moneyLine"))
+                    if h_odds is not None and a_odds is not None:
+                        return h_odds, a_odds
         return None
     except Exception:
         return None
@@ -144,6 +143,7 @@ def extract_even_money_candidates(events, sport_key):
             continue
         
         comp = competitions[0]
+        comp_id = comp.get("id", event_id)
         competitors = comp.get("competitors", [])
         if len(competitors) != 2:
             continue
@@ -159,23 +159,45 @@ def extract_even_money_candidates(events, sport_key):
         if not home_team or not away_team:
             continue
 
-        odds_tuple = fetch_core_odds(sport_key, event_id)
-        if not odds_tuple:
-            home_odds, away_odds = None, None
-            odds_list = comp.get("odds", [])
-            for provider_odds in odds_list:
-                h_ml = safe_int(provider_odds.get("homeTeamOdds", {}).get("moneyLine"))
-                a_ml = safe_int(provider_odds.get("awayTeamOdds", {}).get("moneyLine"))
-                if h_ml is not None and a_ml is not None:
-                    home_odds = h_ml
-                    away_odds = a_ml
-                    break
-        else:
-            home_odds, away_odds = odds_tuple
+        home_odds, away_odds = None, None
 
+        # Tier 1: Scoreboard competition-level odds payload
+        odds_list = comp.get("odds", [])
+        for provider_odds in odds_list:
+            h_ml = safe_int(provider_odds.get("homeTeamOdds", {}).get("moneyLine"))
+            a_ml = safe_int(provider_odds.get("awayTeamOdds", {}).get("moneyLine"))
+            if h_ml is not None and a_ml is not None:
+                home_odds = h_ml
+                away_odds = a_ml
+                break
+
+        # Tier 2: Core API endpoint lookup with resolved competition ID
+        if home_odds is None or away_odds is None:
+            odds_tuple = fetch_core_odds(sport_key, event_id, comp_id)
+            if odds_tuple:
+                home_odds, away_odds = odds_tuple
+
+        # Tier 3: Competitor-level odds/lines fallback
+        if home_odds is None or away_odds is None:
+            h_val, a_val = None, None
+            for c in competitors:
+                is_home = (c.get("homeAway") == "home")
+                for line_obj in c.get("odds", []) or c.get("lines", []):
+                    val = safe_int(line_obj.get("moneyLine") or line_obj.get("odds"))
+                    if val is not None:
+                        if is_home:
+                            h_val = val
+                        else:
+                            a_val = val
+            if h_val is not None and a_val is not None:
+                home_odds = h_val
+                away_odds = a_val
+
+        # ZERO-FALLBACK RULE: Drop immediately if missing verified moneyline across all tiers
         if home_odds is None or away_odds is None:
             continue
 
+        # STRICT EVEN-MONEY CORRIDOR FILTER: Drop anything outside -130 to +130
         if not (-130 <= home_odds <= 130) or not (-130 <= away_odds <= 130):
             continue
 
